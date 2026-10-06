@@ -1,0 +1,71 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+*.log
+
+# env files (set these in cPanel, not in GitHub)
+.env*
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# editors and local caches
+.idea/
+.vscode/
+*.swp
+*.swo
+.turbo/
+.swc/
+
+# Cursor / agent tooling (not used by the site)
+.cursor/
+.agents/
+skills-lock.json
+AGENTS.md
+CLAUDE.md
+
+# cPanel / CloudLinux runtime (created on the server after git pull)
+error_log
+stderr.log
+stdout.log
+/tmp/
+nodevenv/
+.cagefs/
+.cl.selector/
+passenger.*.log
