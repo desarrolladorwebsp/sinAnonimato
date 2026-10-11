@@ -7,9 +7,14 @@ export const navItems = [
 
 export const socials = [
   {
-    href: "#contacto",
+    href: "https://www.instagram.com/sinanonimato.cl/",
     platform: "Instagram",
     cue: "Síguenos",
+  },
+  {
+    href: "https://www.facebook.com/profile.php?id=61595175120899",
+    platform: "Facebook",
+    cue: "Visítanos",
   },
   {
     href: "#contacto",

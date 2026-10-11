@@ -1,51 +1,64 @@
 "use client";
 
 import { ChatText, EnvelopeSimple, Phone, User, ArrowRight } from "@phosphor-icons/react";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { validateContact, type ContactErrors, type ContactMessage } from "@/lib/contact";
 
-type Fields = {
-  name: string;
-  email: string;
-  phone: string;
-  story: string;
-};
-
-const empty: Fields = { name: "", email: "", phone: "", story: "" };
-
-function validate(values: Fields) {
-  const errors: Partial<Record<keyof Fields, string>> = {};
-
-  if (values.name.trim().length < 2) {
-    errors.name = "Escribe tu nombre.";
-  }
-
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) {
-    errors.email = "Escribe un correo válido.";
-  }
-
-  if (values.story.trim().length < 8) {
-    errors.story = "Cuéntanos tu caso.";
-  }
-
-  return errors;
-}
+const empty: ContactMessage = { name: "", email: "", phone: "", story: "" };
 
 export function StoryForm() {
-  const [values, setValues] = useState<Fields>(empty);
-  const [errors, setErrors] = useState<Partial<Record<keyof Fields, string>>>({});
-  const [sent, setSent] = useState(false);
+  const [values, setValues] = useState<ContactMessage>(empty);
+  const [errors, setErrors] = useState<ContactErrors>({});
+  const [status, setStatus] = useState<"editing" | "sending" | "sent" | "error">("editing");
+  const [confirmationSent, setConfirmationSent] = useState(false);
+  const sending = useRef(false);
 
-  function update(field: keyof Fields, value: string) {
+  function update(field: keyof ContactMessage, value: string) {
     setValues((current) => ({ ...current, [field]: value }));
+    setStatus((current) => (current === "error" ? "editing" : current));
   }
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const nextErrors = validate(values);
+    const { value, errors: nextErrors } = validateContact(values);
     setErrors(nextErrors);
 
-    if (Object.keys(nextErrors).length === 0) {
-      setSent(true);
+    if (!value || sending.current) {
+      return;
+    }
+
+    sending.current = true;
+    setStatus("sending");
+
+    try {
+      const response = await fetch("/api/contacto", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(value),
+      });
+      const data = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        confirmationSent?: boolean;
+        errors?: ContactErrors;
+      } | null;
+
+      if (response.status === 400 && data?.errors) {
+        setErrors(data.errors);
+        setStatus("editing");
+        return;
+      }
+
+      if (!response.ok || !data?.ok) {
+        setStatus("error");
+        return;
+      }
+
+      setConfirmationSent(data.confirmationSent !== false);
+      setStatus("sent");
+    } catch {
+      setStatus("error");
+    } finally {
+      sending.current = false;
     }
   }
 
@@ -55,10 +68,26 @@ export function StoryForm() {
         Cuéntanos <span className="text-accent">tu historia</span>
       </h3>
 
-      {sent ? (
-        <div className="py-12 text-sm leading-relaxed text-white/80">
-          <p>Gracias por compartir tu historia. El envío de casos estará disponible próximamente.</p>
-          <button className="editorial-link mt-6" type="button" onClick={() => setSent(false)}>Editar mi caso</button>
+      {status === "sent" ? (
+        <div className="py-12 text-sm leading-relaxed text-white/80" role="status">
+          <p>Gracias, {values.name}. Recibimos tu historia y te responderemos pronto.</p>
+          <p className="mt-3">
+            {confirmationSent
+              ? `Te enviamos una confirmación a ${values.email}.`
+              : "No pudimos enviar la confirmación a tu correo, pero tu caso ya llegó a nuestro equipo."}
+          </p>
+          <button
+            className="editorial-link mt-6"
+            type="button"
+            onClick={() => {
+              setValues(empty);
+              setErrors({});
+              setConfirmationSent(false);
+              setStatus("editing");
+            }}
+          >
+            Enviar otro caso
+          </button>
         </div>
       ) : (
         <form className="mt-6 flex flex-col gap-3.5" onSubmit={onSubmit} noValidate>
@@ -87,6 +116,7 @@ export function StoryForm() {
             type="tel"
             icon={<Phone size={16} weight="bold" />}
             value={values.phone}
+            error={errors.phone}
             autoComplete="tel"
             onChange={(value) => update("phone", value)}
           />
@@ -99,11 +129,18 @@ export function StoryForm() {
             multiline
             onChange={(value) => update("story", value)}
           />
+          {status === "error" ? (
+            <p role="alert" className="text-center text-xs leading-relaxed text-accent">
+              No pudimos enviar tu caso. Inténtalo de nuevo en unos minutos.
+            </p>
+          ) : null}
           <button
             type="submit"
-            className="story-submit mt-2 flex min-h-12 w-full items-center justify-center gap-3 rounded-lg px-4 text-sm font-bold tracking-[0.08em] text-white uppercase"
+            disabled={status === "sending"}
+            aria-busy={status === "sending"}
+            className="story-submit mt-2 flex min-h-12 w-full items-center justify-center gap-3 rounded-lg px-4 text-sm font-bold tracking-[0.08em] text-white uppercase disabled:opacity-60"
           >
-            Enviar mi caso
+            {status === "sending" ? "Enviando" : "Enviar mi caso"}
             <ArrowRight size={16} weight="bold" aria-hidden="true" />
           </button>
           <p className="text-center text-xs leading-relaxed text-white/65">
