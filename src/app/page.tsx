@@ -3,6 +3,7 @@ import { Hero } from "@/components/hero";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { SiteExperience } from "@/components/site-experience";
+import { LiveIndicator } from "@/components/live-indicator";
 
 export default function Home() {
   return (
@@ -13,6 +14,7 @@ export default function Home() {
         <ContactSection />
       </main>
       <SiteFooter />
+      <LiveIndicator />
     </SiteExperience>
   );
 }

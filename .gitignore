@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/.preview
 
 # next.js
 /.next/
@@ -22,6 +23,7 @@
 
 # misc
 .DS_Store
+._*
 Thumbs.db
 ehthumbs.db
 Desktop.ini

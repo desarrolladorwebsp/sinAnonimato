@@ -1,12 +1,21 @@
 import type { Metadata } from "next";
-import { Montserrat } from "next/font/google";
-import { LiveIndicator } from "@/components/live-indicator";
+import localFont from "next/font/local";
 import "./globals.css";
+import "./authorizations.css";
 
-const montserrat = Montserrat({
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800", "900"],
-  style: ["normal", "italic"],
+const montserrat = localFont({
+  src: [
+    { path: "../assets/fonts/montserrat-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "../assets/fonts/montserrat-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "../assets/fonts/montserrat-latin-700-normal.woff2", weight: "700", style: "normal" },
+    { path: "../assets/fonts/montserrat-latin-800-normal.woff2", weight: "800", style: "normal" },
+    { path: "../assets/fonts/montserrat-latin-900-normal.woff2", weight: "900", style: "normal" },
+    { path: "../assets/fonts/montserrat-latin-500-italic.woff2", weight: "500", style: "italic" },
+    { path: "../assets/fonts/montserrat-latin-600-italic.woff2", weight: "600", style: "italic" },
+    { path: "../assets/fonts/montserrat-latin-700-italic.woff2", weight: "700", style: "italic" },
+    { path: "../assets/fonts/montserrat-latin-800-italic.woff2", weight: "800", style: "italic" },
+    { path: "../assets/fonts/montserrat-latin-900-italic.woff2", weight: "900", style: "italic" },
+  ],
   variable: "--font-montserrat",
   display: "swap",
 });
@@ -22,7 +31,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="es" className={`${montserrat.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col bg-background text-foreground">
         {children}
-        <LiveIndicator />
       </body>
     </html>
   );

@@ -21,6 +21,8 @@ const eslintConfig = defineConfig([
     files: testFiles,
   },
   globalIgnores([
+    "**/._*",
+    ".preview/**",
     ".next/**",
     "out/**",
     "build/**",
