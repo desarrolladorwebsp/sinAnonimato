@@ -53,13 +53,13 @@ Se encolan por separado la copia PDF del invitado y el aviso a producción con a
 
 ## Envíos, reintentos y seguimiento
 
-La cola es persistente, con bloqueo de filas, reintentos y una clave de idempotencia por mensaje. `after()` intenta procesarla al terminar una solicitud, pero es obligatorio programar un trabajador cada minuto:
+La cola es persistente, con bloqueo de filas, reintentos y una clave de idempotencia por mensaje. `after()` intenta procesarla al terminar una solicitud, pero es obligatorio programar un trabajador periódico:
 
 ```sh
 npm run authorizations:worker
 ```
 
-Vercel tiene un cron cada minuto en `vercel.json`: invoca GET `/api/internal/authorizations` y autentica con `CRON_SECRET`. La ruta también admite POST para trabajadores externos. Ambos métodos exigen el encabezado `Authorization: Bearer <secreto>`; no ponerlo en la URL. `AUTHORIZATION_CRON_SECRET` se conserva como alternativa cuando no existe `CRON_SECRET`. El trabajador admite varios procesos usando `FOR UPDATE SKIP LOCKED`.
+Vercel tiene un cron cada 15 minutos en `vercel.json`: invoca GET `/api/internal/authorizations` y autentica con `CRON_SECRET`. La ruta también admite POST para trabajadores externos. Ambos métodos exigen el encabezado `Authorization: Bearer <secreto>`; no ponerlo en la URL. `AUTHORIZATION_CRON_SECRET` se conserva como alternativa cuando no existe `CRON_SECRET`. El trabajador admite varios procesos usando `FOR UPDATE SKIP LOCKED`.
 
 Los intentos fallidos usan espera exponencial con máximo de 60 minutos y 8 intentos. Los enlaces vencidos se cancelan sin enviarse. Mensajes con más de 23 horas dejan de reintentarse para permanecer dentro de la ventana de idempotencia del proveedor. Tras agotar intentos, producción debe revisar el estado, resolver la causa y solicitar un nuevo enlace. No eliminar la cola como mecanismo de reintento.
 
@@ -86,3 +86,5 @@ Los respaldos del proveedor requieren cifrado, acceso limitado, plazos y pruebas
 El panel usa únicamente el origen de la aplicación, la sesión y la lista de acceso; no requiere inventar una política legal para abrirse. Mientras no se publiquen las condiciones y no se configure el plazo/texto de conservación aprobado, el servidor rechaza invitaciones y el panel muestra los requisitos pendientes. No se precargan textos legales de ejemplo en Production.
 
 La credencial de Resend existente se reutilizó exclusivamente para este proyecto. Se creó un webhook dedicado en el dominio canónico; no se modificó el dominio ni se enviaron correos de prueba a invitados.
+
+Los envíos se intentan inmediatamente con `after()`; el cron es el respaldo para reintentos y mantenimiento. Se usa una frecuencia de 15 minutos para permitir la suspensión por inactividad de la base Free cuando no hay uso.
