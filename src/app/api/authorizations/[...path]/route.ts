@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { AuthorizationError, readiness } from "@/lib/authorizations/config";
 import { database } from "@/lib/authorizations/db";
 import { digest } from "@/lib/authorizations/crypto";
-import { body, guestSession, json, privateHeaders, rateLimit, sameOrigin, setGuest } from "@/lib/authorizations/http";
+import { body, guestSession, json, privateHeaders, rateLimit, sameOrigin, setGuest, setConfirmation, confirmationToken, clearConfirmation } from "@/lib/authorizations/http";
 import { processOutbox } from "@/lib/authorizations/mail";
 import { Authorizations } from "@/lib/authorizations/service";
 
@@ -22,6 +22,7 @@ async function handler(request: Request, context: Context) {
       // valid sessions have their own quota. Never trust arbitrary forwarded IP headers.
       await rateLimit(db, "guest:global", 300);
       await rateLimit(db, session ? `guest:${digest(session)}` : "guest:anonymous", 60);
+      if (method === "GET" && path[1] === "confirmation") return json(await service.confirmationDetails(await confirmationToken()));
       if (method === "GET" && path[1] === "me") return json(await service.view(session));
       if (method === "GET" && path[1] === "receipt") {
         const row = await service.guestRow(session);
@@ -29,10 +30,11 @@ async function handler(request: Request, context: Context) {
       }
       if (method === "POST") {
         const input = await body(request);
+        if (path[1] === "verification") { const details = await service.confirmationDetails(input.token); await setConfirmation(String(input.token), details.expiresAt); return json(details); }
         if (path[1] === "exchange") { const result = await service.exchange(input.token); await setGuest(result.session, result.expires); return json({ ok: true }); }
         if (path[1] === "accept") { await service.accept(session, input); notify(); return json({ ok: true }); }
         if (path[1] === "resend") { await service.resend(session); notify(); return json({ ok: true }); }
-        if (path[1] === "confirm") { const result = await service.confirm(input.token); await setGuest(result.session, result.expires); notify(); return json({ ok: true }); }
+        if (path[1] === "confirm") { const result = await service.confirm(input.token ?? await confirmationToken()); await setGuest(result.session, result.expires); await clearConfirmation(); notify(); return json({ ok: true }); }
       }
     }
     if (path[0] === "admin") {
@@ -60,6 +62,8 @@ async function handler(request: Request, context: Context) {
         if (path[1] === "invite") { const result = await service.invite(input, admin.email); notify(); return json(result, 201); }
         if (path[1] === "manage" && input.action === "resend") { await service.manage(String(input.id), input.action, admin.email); notify(); return json({ ok: true }); }
         await requireAdmin(request.headers, true);
+        if (path[1] === "confirm") { const result = await service.confirmByProduction(String(input.id), admin.email, input.approved); notify(); return json(result); }
+        if (path[1] === "reject") return json(await service.rejectByProduction(String(input.id), admin.email, input.rejected));
         if (path[1] === "document") return json(await service.createDocument(input, admin.email), 201);
         if (path[1] === "approve") { await service.approveDocument(String(input.id), admin.email, input.approved); return json({ ok: true }); }
         if (path[1] === "retire") { await service.retireDocument(String(input.id)); return json({ ok: true }); }

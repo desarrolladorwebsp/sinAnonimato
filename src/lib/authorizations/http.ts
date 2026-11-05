@@ -4,6 +4,7 @@ import { digest } from "./crypto";
 import type { Database } from "./db";
 
 export const GUEST_COOKIE = "sa_guest";
+export const CONFIRMATION_COOKIE = "sa_confirmation";
 export const privateHeaders = { "Cache-Control": "private, no-store, max-age=0", "X-Robots-Tag": "noindex, nofollow, noarchive", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff" };
 export const json = (value: unknown, status = 200) => Response.json(value, { status, headers: privateHeaders });
 export function sameOrigin(request: Request) {
@@ -28,6 +29,13 @@ export async function body(request: Request, maxBytes = 180000) {
 }
 export async function setGuest(session: string, expires: Date) {
   (await cookies()).set(GUEST_COOKIE, session, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict", path: "/api/authorizations", expires: new Date(expires) });
+}
+export async function setConfirmation(token: string, expires: string) {
+  (await cookies()).set(CONFIRMATION_COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict", path: "/api/authorizations", expires: new Date(expires) });
+}
+export async function confirmationToken() { return (await cookies()).get(CONFIRMATION_COOKIE)?.value; }
+export async function clearConfirmation() {
+  (await cookies()).set(CONFIRMATION_COOKIE, "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict", path: "/api/authorizations", maxAge: 0 });
 }
 export async function guestSession() { return (await cookies()).get(GUEST_COOKIE)?.value; }
 

@@ -24,7 +24,7 @@ async function documentOf(db: Connection, id: string) {
   return rows[0];
 }
 async function active(row: Authorization | undefined): Promise<Authorization> {
-  if (!row || row.state === "cancelled" || (row.retain_until && date(row.retain_until) <= new Date())) fail();
+  if (!row || ["cancelled", "rejected"].includes(row.state) || (row.retain_until && date(row.retain_until) <= new Date())) fail();
   return row;
 }
 
@@ -97,7 +97,7 @@ export class Authorizations {
     const legal = await documentOf(this.db, row.document_id);
     // Explicit projection keeps internal approver emails and metadata out of guest responses.
     const document = { id: legal.id, title: legal.title, version: legal.version, content: legal.content, privacy: legal.privacy, acceptance: legal.acceptance, digest: legal.digest, approved_at: legal.approved_at, retired_at: legal.retired_at };
-    return { id: row.id, name: person.name, email: person.email, episode: row.episode, recordingAt: date(row.recording_at).toISOString(), state: row.state, document, retentionPolicy: person.retentionPolicy, acceptedAt: row.accepted_at ? date(row.accepted_at).toISOString() : null, confirmedAt: row.confirmed_at ? date(row.confirmed_at).toISOString() : null };
+    return { id: row.id, name: person.name, email: person.email, episode: row.episode, recordingAt: date(row.recording_at).toISOString(), state: row.state, document, retentionPolicy: person.retentionPolicy, acceptedAt: row.accepted_at ? date(row.accepted_at).toISOString() : null, confirmedAt: row.confirmed_at ? date(row.confirmed_at).toISOString() : null, confirmationMethod: row.confirmation_method };
   }
   async verification(db: Connection, row: Authorization, personal: Personal) {
     const verification = token();
@@ -134,37 +134,73 @@ export class Authorizations {
       await this.verification(db, row, personOf(row));
     });
   }
+  async confirmationDetails(verification: unknown) {
+    if (!validToken(verification)) fail();
+    const { rows } = await this.db.query<Authorization>("SELECT * FROM sa_authorizations WHERE verify_hash=$1", [digest(verification)]);
+    const row = await active(rows[0]);
+    if (row.state !== "pending" || !row.verify_expires || date(row.verify_expires) <= new Date()) fail();
+    const document = await documentOf(this.db, row.document_id);
+    if (document.retired_at) fail();
+    return { episode: row.episode, documentTitle: document.title, documentVersion: document.version, expiresAt: date(row.verify_expires).toISOString() };
+  }
+  private async finalize(db: Connection, row: Authorization, method: "email" | "production", actor: string) {
+    const document = await documentOf(db, row.document_id);
+    if (!document.approved_at || document.retired_at) throw new AuthorizationError(409, "El documento fue retirado. Contacta a producción.");
+    const person = personOf(row);
+    if (!row.accepted_at || !person.rut) throw new AuthorizationError(409, "El invitado debe registrar primero su aceptación expresa y sus datos.");
+    row.confirmed_at = new Date(); row.confirmation_method = method; row.confirmed_by = method === "production" ? actor : null;
+    const receipt = await makeReceipt(row, person, document);
+    await db.query("UPDATE sa_authorizations SET state='confirmed',confirmed_at=$2,confirmation_method=$3,confirmed_by=$4,verify_hash=NULL,verify_expires=NULL,invite_hash=NULL,receipt=$5,receipt_digest=$6 WHERE id=$1", [row.id,row.confirmed_at,method,row.confirmed_by,seal(receipt.toString("base64"), `receipt:${row.id}`),digest(receipt)]);
+    await db.query("UPDATE sa_outbox SET status='cancelled',payload='' WHERE authorization_id=$1 AND kind='verification' AND status IN ('queued','failed')", [row.id]);
+    await event(db, row.id, method === "email" ? "email_confirmed" : "production_confirmed", actor, { method, documentDigest: document.digest, acceptedAt: row.accepted_at, receiptDigest: digest(receipt) });
+    await enqueue(db, row, "guest_receipt", { to: person.email, name: person.name, episode: row.episode, confirmationMethod: method });
+    await enqueue(db, row, "production", { to: validate.email(process.env.PRODUCTION_EMAIL), name: person.name, episode: row.episode, confirmationMethod: method, url: `${settings().origin}/admin/autorizaciones` });
+  }
   async confirm(verification: unknown) {
     if (!validToken(verification)) fail();
     return this.db.transaction(async db => {
       const { rows } = await db.query<Authorization>("SELECT * FROM sa_authorizations WHERE verify_hash=$1 FOR UPDATE", [digest(verification)]);
       const row = await active(rows[0]);
       if (row.state !== "pending" || !row.verify_expires || date(row.verify_expires) <= new Date()) fail();
-      const document = await documentOf(db, row.document_id);
-      if (document.retired_at) throw new AuthorizationError(409, "El documento fue retirado. Contacta a producción.");
-      const now = new Date();
-      row.confirmed_at = now;
-      const person = personOf(row);
-      const receipt = await makeReceipt(row, person, document);
+      await this.finalize(db, row, "email", "guest");
       const session = token();
-      const sessionExpires = new Date(Math.min(Date.now() + 7 * 86400000, (row.retain_until ? date(row.retain_until).getTime() : Infinity)));
-      await db.query("UPDATE sa_authorizations SET state='confirmed',confirmed_at=$2,verify_hash=NULL,verify_expires=NULL,invite_hash=NULL,guest_hash=$3,guest_expires=$4,receipt=$5,receipt_digest=$6 WHERE id=$1", [row.id,now,digest(session),sessionExpires,seal(receipt.toString("base64"), `receipt:${row.id}`),digest(receipt)]);
-      await event(db, row.id, "email_confirmed", "guest", { receiptDigest: digest(receipt) });
-      await enqueue(db, row, "guest_receipt", { to: person.email, name: person.name, episode: row.episode });
-      await enqueue(db, row, "production", { to: validate.email(process.env.PRODUCTION_EMAIL), name: person.name, episode: row.episode, url: `${settings().origin}/admin/autorizaciones` });
-      return { session, expires: sessionExpires, id: row.id };
+      const expires = new Date(Math.min(Date.now() + 7 * 86400000, row.retain_until ? date(row.retain_until).getTime() : Infinity));
+      await db.query("UPDATE sa_authorizations SET guest_hash=$2,guest_expires=$3 WHERE id=$1", [row.id,digest(session),expires]);
+      return { session, expires, id: row.id };
+    });
+  }
+  async confirmByProduction(id: string, actor: string, approved: unknown) {
+    if (approved !== true) throw new AuthorizationError(400, "Debes confirmar la validación de producción.");
+    return this.db.transaction(async db => {
+      const { rows } = await db.query<Authorization>("SELECT * FROM sa_authorizations WHERE id=$1 FOR UPDATE", [validate.uuid(id)]);
+      const row = await active(rows[0]);
+      if (row.state !== "pending" || !row.accepted_at) throw new AuthorizationError(409, "Solo puedes confirmar una autorización con aceptación del invitado pendiente de validación.");
+      await this.finalize(db, row, "production", actor);
+      return { id: row.id };
+    });
+  }
+  async rejectByProduction(id: string, actor: string, rejected: unknown) {
+    if (rejected !== true) throw new AuthorizationError(400, "Debes confirmar el rechazo.");
+    return this.db.transaction(async db => {
+      const { rows } = await db.query<Authorization>("SELECT * FROM sa_authorizations WHERE id=$1 FOR UPDATE", [validate.uuid(id)]);
+      const row = await active(rows[0]);
+      if (!["invited", "pending"].includes(row.state)) throw new AuthorizationError(409, "Una autorización completada no puede rechazarse desde esta acción.");
+      await db.query("UPDATE sa_authorizations SET state='rejected',rejected_at=now(),invite_hash=NULL,guest_hash=NULL,verify_hash=NULL,verify_expires=NULL WHERE id=$1", [row.id]);
+      await db.query("UPDATE sa_outbox SET status='cancelled',payload='' WHERE authorization_id=$1 AND status IN ('queued','failed')", [row.id]);
+      await event(db, row.id, "production_rejected", actor);
+      return { id: row.id };
     });
   }
   async receipt(row: Authorization, actor: string) {
-    if (row.state !== "confirmed" || !row.receipt) throw new AuthorizationError(409, "El comprobante estará disponible después de confirmar el correo.");
+    if (row.state !== "confirmed" || !row.receipt) throw new AuthorizationError(409, "El comprobante estará disponible después de la confirmación final.");
     const pdf = Buffer.from(unseal(row.receipt, `receipt:${row.id}`), "base64");
     if (digest(pdf) !== row.receipt_digest) throw new AuthorizationError(500, "No se pudo verificar la integridad del comprobante.");
     await event(this.db, row.id, "receipt_downloaded", actor);
     return pdf;
   }
   async list(search = "") {
-    const { rows } = await this.db.query<Pick<Authorization, "id" | "personal" | "episode" | "recording_at" | "state" | "created_at" | "accepted_at" | "confirmed_at" | "retain_until" | "legal_hold" | "document_id">>("SELECT id,personal,episode,recording_at,state,created_at,accepted_at,confirmed_at,retain_until,legal_hold,document_id FROM sa_authorizations ORDER BY created_at DESC");
-    return rows.map(row => ({ id: row.id, ...personOf(row), episode: row.episode, recordingAt: row.recording_at, state: row.state, createdAt: row.created_at, acceptedAt: row.accepted_at, confirmedAt: row.confirmed_at, retainUntil: row.retain_until, legalHold: row.legal_hold, documentId: row.document_id })).filter(row => `${row.name} ${row.email} ${row.episode}`.toLowerCase().includes(search.toLowerCase()));
+    const { rows } = await this.db.query<Pick<Authorization, "id" | "personal" | "episode" | "recording_at" | "state" | "created_at" | "accepted_at" | "confirmed_at" | "retain_until" | "legal_hold" | "document_id" | "confirmation_method" | "confirmed_by">>("SELECT id,personal,episode,recording_at,state,created_at,accepted_at,confirmed_at,retain_until,legal_hold,document_id,confirmation_method,confirmed_by FROM sa_authorizations ORDER BY created_at DESC");
+    return rows.map(row => ({ id: row.id, ...personOf(row), episode: row.episode, recordingAt: row.recording_at, state: row.state, createdAt: row.created_at, acceptedAt: row.accepted_at, confirmedAt: row.confirmed_at, retainUntil: row.retain_until, legalHold: row.legal_hold, documentId: row.document_id, confirmationMethod: row.confirmation_method, confirmedBy: row.confirmed_by })).filter(row => `${row.name} ${row.email} ${row.episode}`.toLowerCase().includes(search.toLowerCase()));
   }
   async adminRow(id: string) {
     const { rows } = await this.db.query<Authorization>("SELECT * FROM sa_authorizations WHERE id=$1", [validate.uuid(id)]);
@@ -179,7 +215,7 @@ export class Authorizations {
       if (action === "end-retention") {
         if (row.legal_hold) throw new AuthorizationError(409, "Levanta el bloqueo legal antes de finalizar la conservación.");
         const explanation = validate.text(reason, "el motivo de finalización", 1000, 20);
-        await db.query("UPDATE sa_authorizations SET retain_until=now(),invite_hash=NULL,guest_hash=NULL,verify_hash=NULL,state=CASE WHEN state='confirmed' THEN state ELSE 'cancelled' END WHERE id=$1", [id]);
+        await db.query("UPDATE sa_authorizations SET retain_until=now(),invite_hash=NULL,guest_hash=NULL,verify_hash=NULL,state=CASE WHEN state IN ('confirmed','rejected') THEN state ELSE 'cancelled' END WHERE id=$1", [id]);
         await db.query("UPDATE sa_outbox SET status='cancelled',payload='' WHERE authorization_id=$1 AND status IN ('queued','failed')", [id]);
         await event(db, id, "retention_ended", actor, { reason: explanation });
         return;
@@ -192,7 +228,7 @@ export class Authorizations {
       if (action === "hold" || action === "release") {
         await db.query("UPDATE sa_authorizations SET legal_hold=$2 WHERE id=$1", [id, action === "hold"]);
       } else if (action === "cancel") {
-        if (row.state === "confirmed") throw new AuthorizationError(409, "Una autorización confirmada debe conservar su evidencia. Gestiona el retiro con el responsable legal.");
+        if (row.state === "confirmed" || row.state === "rejected") throw new AuthorizationError(409, "Una autorización confirmada debe conservar su evidencia. Gestiona el retiro con el responsable legal.");
         await db.query("UPDATE sa_authorizations SET state='cancelled',invite_hash=NULL,guest_hash=NULL,verify_hash=NULL WHERE id=$1", [id]);
         await db.query("UPDATE sa_outbox SET status='cancelled',payload='' WHERE authorization_id=$1 AND status IN ('queued','failed')", [id]);
       } else if (action === "resend") {

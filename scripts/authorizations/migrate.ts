@@ -11,7 +11,7 @@ async function main() {
   try {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock(17415003)");
-    for (const filename of ["001_authorizations.sql", "002_indefinite_retention.sql"]) {
+    for (const filename of ["001_authorizations.sql", "002_indefinite_retention.sql", "003_production_confirmation.sql"]) {
       await client.query(await readFile(new URL(`../../migrations/${filename}`, import.meta.url), "utf8"));
     }
     await client.query("COMMIT");

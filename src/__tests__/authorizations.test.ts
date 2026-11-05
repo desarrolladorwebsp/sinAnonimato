@@ -23,6 +23,7 @@ beforeAll(async () => {
   vi.stubEnv("PRODUCTION_EMAIL", "produccion@example.test");
   await pg.exec(await readFile("migrations/001_authorizations.sql", "utf8"));
   await pg.exec(await readFile("migrations/002_indefinite_retention.sql", "utf8"));
+  await pg.exec(await readFile("migrations/003_production_confirmation.sql", "utf8"));
 });
 beforeEach(async () => {
   await pg.exec("TRUNCATE sa_events,sa_outbox,sa_authorizations,sa_documents,sa_rate_limits CASCADE");
@@ -110,6 +111,53 @@ describe("authorizations with an isolated PostgreSQL engine", () => {
     const { rows } = await db.query<{ kind: string }>("SELECT kind FROM sa_outbox WHERE kind IN ('guest_receipt','production')");
     expect(rows.map(value => value.kind).sort()).toEqual(["guest_receipt","production"]);
     await mkdir(".preview/authorizations", { recursive: true }); await writeFile(".preview/authorizations/comprobante-prueba.pdf", pdf);
+  });
+  it("preserves verification across reloads without consuming acceptance", async () => {
+    const guest = await accepted();
+    const first = await service.confirmationDetails(guest.verification);
+    expect(first).toMatchObject({ episode: "Grabación de prueba", documentVersion: legal.version });
+    expect(first).not.toHaveProperty("email");
+    expect(await service.confirmationDetails(guest.verification)).toEqual(first);
+    expect((await service.adminRow(guest.id)).state).toBe("pending");
+    await service.confirm(guest.verification);
+    await expect(service.confirmationDetails(guest.verification)).rejects.toThrow();
+  });
+  it("requires guest acceptance and an explicit administrative decision", async () => {
+    const guest = await invitation();
+    await expect(service.confirmByProduction(guest.id, "admin@example.test", true)).rejects.toThrow("aceptación");
+    await expect(service.confirmByProduction(guest.id, "admin@example.test", false)).rejects.toThrow();
+    await expect(service.rejectByProduction(guest.id, "admin@example.test", false)).rejects.toThrow();
+    expect((await service.adminRow(guest.id)).state).toBe("invited");
+  });
+  it("records production confirmation honestly, preserves the guest session and generates one receipt", async () => {
+    const guest = await accepted();
+    await service.confirmByProduction(guest.id, "admin@example.test", true);
+    const row = await service.adminRow(guest.id);
+    expect(row).toMatchObject({ state: "confirmed", confirmation_method: "production", confirmed_by: "admin@example.test", verify_hash: null });
+    expect((await service.view(guest.session))).toMatchObject({ state: "confirmed", confirmationMethod: "production" });
+    await expect(service.confirm(guest.verification)).rejects.toThrow();
+    await expect(service.confirmByProduction(guest.id, "admin@example.test", true)).rejects.toThrow();
+    await expect(service.rejectByProduction(guest.id, "admin@example.test", true)).rejects.toThrow();
+    const events = await db.query("SELECT kind,actor FROM sa_events WHERE authorization_id=$1 AND kind IN ('production_confirmed','email_confirmed')", [guest.id]);
+    expect(events.rows).toEqual([{ kind: "production_confirmed", actor: "admin@example.test" }]);
+    const jobs = await db.query<{id:string;payload:string}>("SELECT id,payload FROM sa_outbox WHERE authorization_id=$1 AND kind IN ('guest_receipt','production')", [guest.id]);
+    expect(jobs.rows).toHaveLength(2);
+    jobs.rows.forEach(job => expect(JSON.parse(unseal(job.payload, `mail:${job.id}`)).confirmationMethod).toBe("production"));
+    const pdf = await service.receipt(row, "admin@example.test");
+    expect(digest(pdf)).toBe(row.receipt_digest);
+    await mkdir(".preview/authorizations", { recursive: true });
+    await writeFile(".preview/authorizations/comprobante-produccion-prueba.pdf", pdf);
+  });
+  it.each([false,true])("rejects invitations or accepted records, revoking links and pending mail (accepted=%s)", async wasAccepted => {
+    const guest = wasAccepted ? await accepted() : await invitation();
+    await service.rejectByProduction(guest.id, "admin@example.test", true);
+    const row = await service.adminRow(guest.id);
+    expect(row).toMatchObject({ state: "rejected", receipt: null, confirmed_at: null, guest_hash: null, verify_hash: null });
+    expect(row.rejected_at).toBeTruthy();
+    await expect(service.view(guest.session)).rejects.toThrow();
+    await expect(service.confirmByProduction(guest.id, "admin@example.test", true)).rejects.toThrow();
+    expect((await db.query("SELECT kind FROM sa_outbox WHERE authorization_id=$1 AND status IN ('queued','failed')", [guest.id])).rows).toHaveLength(0);
+    expect((await db.query("SELECT actor FROM sa_events WHERE authorization_id=$1 AND kind='production_rejected'", [guest.id])).rows).toEqual([{ actor: "admin@example.test" }]);
   });
   it("rejects expired confirmations and invalidates sessions after cancellation", async () => {
     const guest = await accepted(); await db.query("UPDATE sa_authorizations SET verify_expires=now()-interval '1 second' WHERE id=$1", [guest.id]);

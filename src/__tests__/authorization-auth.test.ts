@@ -14,6 +14,7 @@ vi.mock("pg", () => ({ Pool: class {
   async end() {}
 } }));
 import { getAuth, requireAdmin } from "@/lib/auth";
+import { POST as authorizationRoute } from "@/app/api/authorizations/[...path]/route";
 import { POST as authRoute } from "@/app/api/auth/[...all]/route";
 
 beforeAll(async () => {
@@ -62,6 +63,11 @@ describe("password authentication with real handlers and isolated PostgreSQL", (
     const cookie = response.headers.get("set-cookie")!.split(";")[0]; const headers = new Headers({ cookie });
     expect(await requireAdmin(headers)).toMatchObject({ role: "production", email: "production@example.test" });
     await expect(requireAdmin(headers, true)).rejects.toThrow("administración");
+    for (const action of ["confirm", "reject"]) {
+      const response = await authorizationRoute(new Request(`http://localhost:3000/api/authorizations/admin/${action}`, { method: "POST", headers: { Origin: "http://localhost:3000", "Content-Type": "application/json", cookie }, body: JSON.stringify({ id: "fixture", approved: true, rejected: true }) }), { params: Promise.resolve({ path: ["admin", action] }) });
+      expect(response.status).toBe(403);
+    }
+
     vi.stubEnv("AUTHORIZATION_PRODUCTION_EMAILS", ""); await expect(requireAdmin(headers)).rejects.toThrow("Inicia sesión");
     vi.stubEnv("AUTHORIZATION_PRODUCTION_EMAILS", "production@example.test");
   });

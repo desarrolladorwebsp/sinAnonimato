@@ -61,11 +61,11 @@ export async function makeReceipt(record: Authorization, person: Personal, docum
   line(`Folio: ${record.id}`);
   line(`Participante: ${person.name}`);
   line(`RUT: ${person.rut}`);
-  line(`Correo confirmado: ${person.email}`);
+  line(`${record.confirmation_method === "production" ? "Correo del participante" : "Correo confirmado"}: ${person.email}`);
   line(`Episodio: ${record.episode}`);
   line(`Grabación: ${localDate(record.recording_at)} (America/Santiago)`);
   line(`Aceptación expresa: ${localDate(record.accepted_at!)} (America/Santiago)`);
-  line(`Confirmación por correo: ${localDate(record.confirmed_at!)} (America/Santiago)`);
+  line(`${record.confirmation_method === "production" ? "Validación de producción" : "Confirmación por correo"}: ${localDate(record.confirmed_at!)} (America/Santiago)`);
   line(`Tiempos UTC: ${new Date(record.accepted_at!).toISOString()} / ${new Date(record.confirmed_at!).toISOString()}`);
   line(`Documento: ${document.title} - Versión ${document.version}`);
   line(`SHA-256 del documento: ${document.digest}`);
@@ -77,7 +77,7 @@ export async function makeReceipt(record: Authorization, person: Personal, docum
   for (const paragraph of document.privacy.split("\n")) line(paragraph);
   line("Política de conservación informada", true);
   line(person.retentionPolicy);
-  line("Registro electrónico de aceptación expresa y posterior confirmación por correo. No corresponde a una firma electrónica avanzada ni acredita por sí solo identidad civil.");
+  line(record.confirmation_method === "production" ? "Registro electrónico de aceptación expresa del invitado y validación posterior de producción. La validación administrativa no acredita por sí sola la verificación del correo del participante. No corresponde a una firma electrónica avanzada ni acredita por sí solo identidad civil." : "Registro electrónico de aceptación expresa y posterior confirmación por correo. No corresponde a una firma electrónica avanzada ni acredita por sí solo identidad civil.");
   const pages = pdf.getPages();
   pages.forEach((item, index) => item.drawText(`Sin Anonimato | ${record.id} | ${index + 1} / ${pages.length}`, { x: 48, y: 30, size: 8, font: regular, color: rgb(.4, .4, .4) }));
   return Buffer.from(await pdf.save());

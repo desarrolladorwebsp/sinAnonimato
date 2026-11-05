@@ -6,7 +6,7 @@ import type { Database } from "./db";
 import { unseal } from "./crypto";
 import { event } from "./service";
 
-type Payload = { to: string; name: string; episode: string; url?: string };
+type Payload = { to: string; name: string; episode: string; url?: string; confirmationMethod?: "email" | "production" };
 type Job = { id: string; authorization_id: string; kind: string; payload: string; attempts: number };
 const escape = (value: string) => value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
 
@@ -23,8 +23,8 @@ export const resendSender: MailSender = async (job, payload, attachment) => {
   const copy: Record<string, string> = {
     invitation: "Antes de grabar, revisa y confirma tu autorización de participación. Este enlace es privado y tiene vencimiento.",
     verification: "Recibimos tu aceptación. Abre el enlace y presiona Confirmar mi autorización. El enlace vence en 30 minutos como máximo.",
-    guest_receipt: "Tu autorización quedó confirmada. Adjuntamos tu comprobante para que conserves una copia.",
-    production: "El invitado completó la confirmación por correo y su comprobante PDF ya está disponible en el panel privado.",
+    guest_receipt: payload.confirmationMethod === "production" ? "Producción registró la validación de tu autorización. Adjuntamos tu comprobante, que identifica esta modalidad de confirmación." : "Tu autorización quedó confirmada. Adjuntamos tu comprobante para que conserves una copia.",
+    production: payload.confirmationMethod === "production" ? "Un administrador registró la validación de producción. El comprobante PDF identifica esta modalidad y ya está disponible en el panel privado." : "El invitado completó la confirmación por correo y su comprobante PDF ya está disponible en el panel privado.",
   };
   const button = job.kind === "invitation" ? "Revisar autorización" : job.kind === "verification" ? "Confirmar autorización" : "Abrir panel privado";
   const text = `Hola, ${payload.name}.\n\n${copy[job.kind]}\nParticipación: ${payload.episode}\n${payload.url || ""}\n\nSin Anonimato`;

@@ -25,7 +25,8 @@ export function GuestFlow({ confirm = false, demo = false }: { confirm?: boolean
   const [view, setView] = useState<GuestView | null>(demo ? demonstration : null);
   const [phase, setPhase] = useState<Phase>(confirm ? "confirm" : "identity");
   const [name, setName] = useState(""); const [rut, setRut] = useState("");
-  const [accepted, setAccepted] = useState(false); const [verification, setVerification] = useState("");
+  const [accepted, setAccepted] = useState(false); const [confirmationReady, setConfirmationReady] = useState(false);
+  const [confirmationContext, setConfirmationContext] = useState<{ episode: string; documentTitle: string; documentVersion: string } | null>(null);
   const [error, setError] = useState(""); const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false); const [loading, setLoading] = useState(!demo);
   const initialized = useRef(false); const flight = useRef(false);
@@ -35,19 +36,24 @@ export function GuestFlow({ confirm = false, demo = false }: { confirm?: boolean
     const next: GuestView = await authorizationApi("guest/me");
     setView(next); setName(next.name);
     setPhase(next.state === "confirmed" ? "complete" : next.state === "pending" ? "pending" : "identity");
+    return next;
   }
   useEffect(() => {
     if (initialized.current || demo) return;
     initialized.current = true;
     const fragment = window.location.hash.slice(1);
-    if (fragment) window.history.replaceState(null, "", window.location.pathname);
     if (confirm) {
-      queueMicrotask(() => {
-        setVerification(fragment); setLoading(false);
-        if (!fragment) setError("Este enlace no contiene una confirmación. Abre nuevamente el enlace de tu correo o solicita uno nuevo.");
-      });
+      void (async () => {
+        try {
+          const details = fragment ? await authorizationApi("guest/verification", { token: fragment }) : await authorizationApi("guest/confirmation");
+          if (fragment) window.history.replaceState(null, "", window.location.pathname);
+          setConfirmationContext(details); setConfirmationReady(true);
+        } catch (cause) { setError(cause instanceof Error ? cause.message : "Abre nuevamente el enlace de confirmación de tu correo."); }
+        finally { setLoading(false); }
+      })();
       return;
     }
+    if (fragment) window.history.replaceState(null, "", window.location.pathname);
     void (async () => {
       try { if (fragment) await authorizationApi("guest/exchange", { token: fragment }); await refresh(); }
       catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudo abrir la invitación."); }
@@ -108,16 +114,17 @@ export function GuestFlow({ confirm = false, demo = false }: { confirm?: boolean
           {heading("Revisa tu correo.")}
           <p className="authorization-lead">Registramos tu aceptación. Para completarla, abre el enlace de verificación que enviaremos a:</p>
           <strong className="authorization-email">{view.email}</strong><p className="authorization-status">Pendiente de confirmación</p>
-          <p className="authorization-help">El enlace dura hasta 30 minutos. Revisa también spam o correo no deseado.</p>
-          {demo ? <button className="authorization-button" onClick={() => setPhase("confirm")}>Simular apertura del correo <ArrowRight size={20} /></button> : <button className="authorization-button authorization-button-secondary" disabled={busy} onClick={() => void act(async () => { await authorizationApi("guest/resend", {}); setMessage("Solicitamos un nuevo correo. El enlace anterior dejará de funcionar."); })}>{busy ? "Solicitando…" : "Reenviar correo"}</button>}
+          <p className="authorization-help">Tu aceptación ya está registrada. Falta abrir el correo de verificación y pulsar «Confirmar mi autorización». El enlace dura hasta 30 minutos. Revisa también spam o correo no deseado.</p>
+          {demo ? <button className="authorization-button" onClick={() => setPhase("confirm")}>Simular apertura del correo <ArrowRight size={20} /></button> : <><button className="authorization-button" disabled={busy} onClick={() => void act(async () => { const next = await refresh(); if (next.state !== "confirmed") setMessage("La confirmación final aún no figura registrada. Abre el enlace del correo o consulta a producción."); })}>Ya confirmé, actualizar estado</button><button className="authorization-button authorization-button-secondary" disabled={busy} onClick={() => void act(async () => { await authorizationApi("guest/resend", {}); setMessage("Solicitamos un nuevo correo. El enlace anterior dejará de funcionar."); })}>{busy ? "Solicitando…" : "Reenviar correo"}</button></>}
         </div>}
         {phase === "confirm" && <div className="authorization-centered">
           <LockSimple className="authorization-feature-icon" size={48} weight="light" aria-hidden="true" />
-          {heading("Un último paso, de tu parte.")}
+          {heading("Confirma tu autorización.")}
           <p className="authorization-lead">Confirma que tú aceptaste el documento de participación de Sin Anonimato.</p>
+          {confirmationContext && <div className="authorization-receipt"><div><strong>{confirmationContext.episode}</strong><span>{confirmationContext.documentTitle} · {confirmationContext.documentVersion}</span></div></div>}
           <p className="authorization-help">Si no realizaste esta solicitud, no la confirmes y contacta al equipo.</p>
-          <button className="authorization-button" disabled={busy || (!demo && !verification)} onClick={() => void act(async () => {
-            if (!demo) { await authorizationApi("guest/confirm", { token: verification }); setVerification(""); await refresh(); }
+          <button className="authorization-button" disabled={busy || (!demo && !confirmationReady)} onClick={() => void act(async () => {
+            if (!demo) { await authorizationApi("guest/confirm", {}); setConfirmationReady(false); await refresh(); }
             else setPhase("complete");
           })}>{busy ? "Confirmando…" : "Confirmar mi autorización"}<ArrowRight size={20} aria-hidden="true" /></button>
           <a className="authorization-text-button" href="/autorizacion">Volver a mi autorización</a>
@@ -125,7 +132,7 @@ export function GuestFlow({ confirm = false, demo = false }: { confirm?: boolean
         {phase === "complete" && <div className="authorization-centered">
           <CheckCircle className="authorization-success-icon" size={64} weight="light" aria-hidden="true" />
           {heading("Todo listo para tu participación.")}
-          <p className="authorization-lead">Tu correo está verificado y tu autorización quedó registrada.</p>
+          <p className="authorization-lead">{view?.confirmationMethod === "production" ? "Producción validó tu aceptación y tu autorización quedó registrada." : "Tu correo está verificado y tu autorización quedó registrada."}</p>
           <div className="authorization-receipt"><FileText size={32} aria-hidden="true" /><div><strong>Comprobante de autorización</strong><span>{demo ? "Documento de demostración" : `Folio ${view?.id}`}</span></div></div>
           {demo ? <p className="authorization-help">En el proceso real podrás descargar aquí tu PDF con el documento aceptado y las fechas de aceptación y confirmación.</p> : <a className="authorization-button" href="/api/authorizations/guest/receipt" download><DownloadSimple size={20} aria-hidden="true" /> Descargar comprobante PDF</a>}
           <p className="authorization-help">Enviaremos una copia a tu correo y un aviso al equipo de producción. Conserva el comprobante para tus registros.</p>
