@@ -1,11 +1,9 @@
 import { betterAuth } from "better-auth";
-import { emailOTP } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { database, pool } from "./authorizations/db";
 import { rateLimit } from "./authorizations/http";
 import { adminRole, AuthorizationError, appOrigin } from "./authorizations/config";
-import { sendAdminCode } from "./authorizations/mail";
 
 let instance: ReturnType<typeof buildAuth> | undefined;
 function buildAuth() {
@@ -17,18 +15,17 @@ function buildAuth() {
     secret,
     database: pool(),
     trustedOrigins: [appOrigin()],
-    emailAndPassword: { enabled: false },
+    emailAndPassword: { enabled: true, disableSignUp: true, requireEmailVerification: true, minPasswordLength: 12, maxPasswordLength: 128 },
     session: { expiresIn: 60 * 60 * 8, updateAge: 60 * 60, cookieCache: { enabled: false } },
     rateLimit: { enabled: true, storage: "database", window: 60, max: 15 },
     hooks: { before: createAuthMiddleware(async ctx => {
-      const allowed = new Set(["/email-otp/send-verification-otp", "/sign-in/email-otp", "/get-session", "/sign-out"]);
+      const allowed = new Set(["/sign-in/email", "/get-session", "/sign-out"]);
       if (!allowed.has(ctx.path)) throw new APIError("FORBIDDEN", { message: "Operación no disponible." });
       if (ctx.body?.email && !adminRole(String(ctx.body.email))) throw new APIError("FORBIDDEN", { message: "Acceso disponible solo para el equipo autorizado." });
-      if (ctx.path === "/email-otp/send-verification-otp" && ctx.body?.type !== "sign-in") throw new APIError("FORBIDDEN");
-      if (ctx.path === "/email-otp/send-verification-otp") {
-        try { await rateLimit(database(), `admin-code:${String(ctx.body?.email).trim().toLowerCase()}`, 3, 300); }
+      if (ctx.path === "/sign-in/email") {
+        try { await rateLimit(database(), `admin-password:${String(ctx.body?.email).trim().toLowerCase()}`, 5, 300); }
         catch (error) {
-          if (error instanceof AuthorizationError && error.status === 429) throw new APIError("TOO_MANY_REQUESTS", { message: "Espera cinco minutos antes de solicitar más códigos." });
+          if (error instanceof AuthorizationError && error.status === 429) throw new APIError("TOO_MANY_REQUESTS", { message: "Demasiados intentos. Espera cinco minutos antes de volver a ingresar." });
           throw error;
         }
       }
@@ -37,10 +34,7 @@ function buildAuth() {
       if (!adminRole(user.email)) throw new APIError("FORBIDDEN");
       return { data: user };
     } } } },
-    plugins: [emailOTP({ otpLength: 6, expiresIn: 300, allowedAttempts: 3, storeOTP: "hashed", sendVerificationOTP: async ({ email, otp, type }) => {
-      if (type !== "sign-in" || !adminRole(email)) throw new APIError("FORBIDDEN");
-      await sendAdminCode(email, otp);
-    } }), nextCookies()],
+    plugins: [nextCookies()],
   });
 }
 export function getAuth() { return instance ??= buildAuth(); }

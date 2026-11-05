@@ -18,7 +18,7 @@ const eventLabels: Record<string, string> = { invited: "Invitación creada", inv
 export function AdminPanel() {
   const hydrated = useHydrated();
   const [data, setData] = useState<Overview | null>(null); const [loading, setLoading] = useState(true);
-  const [email, setEmail] = useState(""); const [otp, setOtp] = useState(""); const [codeSent, setCodeSent] = useState(false);
+  const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
   const [error, setError] = useState(""); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<"authorizations" | "documents">("authorizations");
   const [search, setSearch] = useState(""); const [status, setStatus] = useState("");
@@ -44,25 +44,18 @@ export function AdminPanel() {
   return <AuthorizationShell admin>
     {loading ? <p role="status">Comprobando acceso…</p> : !data ? <section className="authorization-card authorization-login">
       <EnvelopeSimple size={36} className="authorization-feature-icon" aria-hidden="true" /><h1>El respaldo de cada conversación.</h1>
-      <p className="authorization-lead">Ingresa al panel con un correo autorizado del equipo.</p>
+      <p className="authorization-lead">Ingresa con el correo autorizado y tu contraseña.</p>
       <form method="post" className="authorization-form" onSubmit={event => submit(event, async () => {
-        if (!codeSent) {
-          const result = await authClient.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
-          if (result.error) throw new Error(result.error.message || "No se pudo enviar el código.");
-          setCodeSent(true); setMessage("Revisa tu correo. El código vence en 5 minutos.");
-        } else {
-          const result = await authClient.signIn.emailOtp({ email, otp });
-          if (result.error) throw new Error("El código no es válido o venció. Solicita uno nuevo.");
-          await reload(); setOtp("");
-        }
+        const result = await authClient.signIn.email({ email: email.trim().toLowerCase(), password, rememberMe: false });
+        if (result.error) throw new Error(result.error.status === 429 ? "Demasiados intentos. Espera cinco minutos antes de volver a ingresar." : "Correo o contraseña incorrectos, o cuenta sin autorización.");
+        setPassword(""); await reload();
       })}>
-        <label>Correo del equipo<input type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} required readOnly={codeSent} /></label>
-        {codeSent && <label>Código de acceso<input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={otp} onChange={event => setOtp(event.target.value)} required autoFocus /></label>}
-        <button className="authorization-button" disabled={busy || !hydrated}>{busy ? "Procesando…" : codeSent ? "Entrar al panel" : "Recibir código de acceso"}<ArrowRight size={20} aria-hidden="true" /></button>
-        {codeSent && <button type="button" className="authorization-text-button" disabled={busy} onClick={() => { setCodeSent(false); setOtp(""); setMessage(""); }}>Solicitar otro código o cambiar correo</button>}
+        <label>Correo del equipo<input name="email" type="email" autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} required /></label>
+        <label>Contraseña<input name="password" type="password" autoComplete="current-password" maxLength={128} value={password} onChange={event => setPassword(event.target.value)} required /></label>
+        <button className="authorization-button" disabled={busy || !hydrated}>{busy ? "Procesando…" : "Entrar al panel"}<ArrowRight size={20} aria-hidden="true" /></button>
       </form>
     </section> : <>
-      <div className="authorization-admin-heading"><div><p className="authorization-kicker">Equipo de producción</p><h1>Autorizaciones</h1><p className="authorization-lead">Cada invitado, su documento y un respaldo verificable.</p></div><button className="authorization-button authorization-button-secondary" disabled={busy} onClick={() => void act(async () => { await authClient.signOut(); setData(null); setCodeSent(false); })}><SignOut size={18} /> Salir</button></div>
+      <div className="authorization-admin-heading"><div><p className="authorization-kicker">Equipo de producción</p><h1>Autorizaciones</h1><p className="authorization-lead">Cada invitado, su documento y un respaldo verificable.</p></div><button className="authorization-button authorization-button-secondary" disabled={busy} onClick={() => void act(async () => { await authClient.signOut(); setData(null); setPassword(""); })}><SignOut size={18} /> Salir</button></div>
       <div className="authorization-admin-identity">{data.admin.email} · {data.admin.role === "admin" ? "Administración" : "Producción"}</div>
       {!canInvite && <section className="authorization-editor" role="status"><h2>Antes de enviar invitaciones</h2><p>{!approvedDocument ? "Carga y publica el documento legal aprobado. " : ""}{!data.readiness.retentionConfigured ? "Define el plazo y la política de conservación con el equipo responsable. " : ""}{!data.readiness.mailConfigured ? "Completa la configuración del correo de producción. " : ""}Puedes trabajar en el panel mientras preparan estos antecedentes.</p></section>}
       <div className="authorization-metrics"><div><strong>{data.authorizations.filter(row => row.state === "confirmed").length}</strong><span>Confirmadas</span></div><div><strong>{data.authorizations.filter(row => row.state === "pending").length}</strong><span>Por confirmar</span></div><div><strong>{data.authorizations.filter(row => row.state === "invited").length}</strong><span>Invitaciones</span></div></div>
