@@ -13,6 +13,8 @@ export function appOrigin() {
 }
 
 export function retentionSettings() {
+  const retentionPolicy = process.env.AUTHORIZATION_RETENTION_POLICY?.trim();
+  if (process.env.AUTHORIZATION_RETENTION_MODE === "indefinite" && retentionPolicy) return { retention: null, retentionPolicy };
   const retention = Number(process.env.AUTHORIZATION_RETENTION_DAYS);
   if (!Number.isInteger(retention) || retention < 1 || retention > 36500 || !process.env.AUTHORIZATION_RETENTION_POLICY?.trim()) {
     throw new AuthorizationError(503, "Falta definir la política de conservación de autorizaciones.");

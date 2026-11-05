@@ -22,6 +22,7 @@ beforeAll(async () => {
   vi.stubEnv("AUTHORIZATION_RETENTION_DAYS", "365"); vi.stubEnv("AUTHORIZATION_RETENTION_POLICY", "Política ficticia de conservación, exclusivamente para pruebas.");
   vi.stubEnv("PRODUCTION_EMAIL", "produccion@example.test");
   await pg.exec(await readFile("migrations/001_authorizations.sql", "utf8"));
+  await pg.exec(await readFile("migrations/002_indefinite_retention.sql", "utf8"));
 });
 beforeEach(async () => {
   await pg.exec("TRUNCATE sa_events,sa_outbox,sa_authorizations,sa_documents,sa_rate_limits CASCADE");
@@ -47,6 +48,26 @@ async function accepted() {
   return { ...guest, verification: await jobToken("verification") };
 }
 describe("authorizations with an isolated PostgreSQL engine", () => {
+  it("supports explicitly configured indeterminate retention without immortal sessions", async () => {
+    vi.stubEnv("AUTHORIZATION_RETENTION_MODE", "indefinite");
+    try {
+      const guest = await accepted();
+      expect((await service.adminRow(guest.id)).retain_until).toBeNull();
+      const confirmed = await service.confirm(guest.verification);
+      expect((await service.view(confirmed.session)).state).toBe("confirmed");
+      expect(confirmed.expires.getTime()).toBeLessThanOrEqual(Date.now() + 7 * 86400000);
+      await expect(service.manage(guest.id, "delete", "admin")).rejects.toThrow("conservación");
+      await expect(service.manage(guest.id, "end-retention", "admin", "corto")).rejects.toThrow();
+      await service.manage(guest.id, "hold", "admin");
+      await expect(service.manage(guest.id, "end-retention", "admin", "La finalidad ha terminado tras revisión")).rejects.toThrow("bloqueo");
+      await service.manage(guest.id, "release", "admin");
+      await service.manage(guest.id, "end-retention", "admin", "La finalidad ha terminado tras revisión");
+      await expect(service.view(confirmed.session)).rejects.toThrow();
+      expect((await db.query("SELECT id FROM sa_outbox WHERE authorization_id=$1 AND status IN ('queued','failed')", [guest.id])).rows).toHaveLength(0);
+      expect((await db.query("SELECT kind FROM sa_events WHERE authorization_id=$1 AND kind='retention_ended'", [guest.id])).rows).toHaveLength(1);
+      await service.manage(guest.id, "delete", "admin");
+    } finally { vi.stubEnv("AUTHORIZATION_RETENTION_MODE", ""); }
+  });
   it("validates Chilean RUTs and rejects mismatched check digits", () => {
     expect(rut("12.345.678-5")).toBe("12345678-5"); expect(() => rut("12.345.678-9")).toThrow();
   });

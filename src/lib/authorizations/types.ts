@@ -9,7 +9,7 @@ export type Authorization = {
   invite_hash: string | null; invite_expires: Date; guest_hash: string | null; guest_expires: Date | null;
   verify_hash: string | null; verify_expires: Date | null; last_verification_at: Date | null;
   accepted_at: Date | null; confirmed_at: Date | null; receipt: string | null; receipt_digest: string | null;
-  created_at: Date; retain_until: Date; legal_hold: boolean;
+  created_at: Date; retain_until: Date | null; legal_hold: boolean;
 };
 export type GuestView = {
   id: string; name: string; email: string; episode: string; recordingAt: string;

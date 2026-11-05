@@ -11,7 +11,9 @@ async function main() {
   try {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock(17415003)");
-    await client.query(await readFile(new URL("../../migrations/001_authorizations.sql", import.meta.url), "utf8"));
+    for (const filename of ["001_authorizations.sql", "002_indefinite_retention.sql"]) {
+      await client.query(await readFile(new URL(`../../migrations/${filename}`, import.meta.url), "utf8"));
+    }
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; }
   finally { client.release(); }

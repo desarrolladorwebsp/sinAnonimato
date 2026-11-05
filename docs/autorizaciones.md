@@ -88,3 +88,9 @@ El panel usa únicamente el origen de la aplicación, la sesión y la lista de a
 La credencial de Resend existente se reutilizó exclusivamente para este proyecto. Se creó un webhook dedicado en el dominio canónico; no se modificó el dominio ni se enviaron correos de prueba a invitados.
 
 Los envíos se intentan inmediatamente con `after()`; el cron es el respaldo para reintentos y mantenimiento. Se usa una frecuencia de 15 minutos para permitir la suspensión por inactividad de la base Free cuando no hay uso.
+
+## Plazo indeterminado explícito
+
+Con aprobación del responsable, `AUTHORIZATION_RETENTION_MODE=indefinite` y una `AUTHORIZATION_RETENTION_POLICY` no vacía permiten invitaciones sin fecha fija de conservación. La migración `002_indefinite_retention.sql` permite NULL en `retain_until`; conserva las fechas de expedientes anteriores. Los enlaces y sesiones conservan sus vencimientos cortos. No se permite borrar un expediente de plazo indeterminado directamente: administración debe finalizar la conservación con un motivo registrado, sin bloqueo legal, y confirmar después su eliminación. Finalizarla invalida los enlaces y cancela los correos pendientes.
+
+El formulario Nueva invitación permite elegir el título y versión del documento aprobado, revisar su contenido y crear la invitación. Los borradores aparecen identificados y no pueden enviarse. La ausencia inicial de sesión no muestra una alerta de error en el acceso; los errores de credenciales se mantienen.

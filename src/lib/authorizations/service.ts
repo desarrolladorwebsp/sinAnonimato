@@ -24,7 +24,7 @@ async function documentOf(db: Connection, id: string) {
   return rows[0];
 }
 async function active(row: Authorization | undefined): Promise<Authorization> {
-  if (!row || row.state === "cancelled" || date(row.retain_until) <= new Date()) fail();
+  if (!row || row.state === "cancelled" || (row.retain_until && date(row.retain_until) <= new Date())) fail();
   return row;
 }
 
@@ -65,7 +65,7 @@ export class Authorizations {
       const id = randomUUID();
       const invitation = token();
       const expires = new Date(Math.min(Date.now() + 7 * 86400000, recording.getTime()));
-      const retainUntil = new Date(recording.getTime() + config.retention * 86400000);
+      const retainUntil = config.retention === null ? null : new Date(recording.getTime() + config.retention * 86400000);
       const { rows } = await db.query<Authorization>("INSERT INTO sa_authorizations(id,document_id,episode,recording_at,personal,invite_hash,invite_expires,created_by,retain_until) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *", [id, document.id, episode, recording, encryptedPerson(id, personal), digest(invitation), expires, actor, retainUntil]);
       await enqueue(db, rows[0], "invitation", { to: personal.email, name: personal.name, episode, url: `${config.origin}/autorizacion#${invitation}` }, expires);
       await event(db, id, "invited", actor, { documentId: document.id, documentDigest: document.digest });
@@ -147,7 +147,7 @@ export class Authorizations {
       const person = personOf(row);
       const receipt = await makeReceipt(row, person, document);
       const session = token();
-      const sessionExpires = new Date(Math.min(Date.now() + 7 * 86400000, date(row.retain_until).getTime()));
+      const sessionExpires = new Date(Math.min(Date.now() + 7 * 86400000, (row.retain_until ? date(row.retain_until).getTime() : Infinity)));
       await db.query("UPDATE sa_authorizations SET state='confirmed',confirmed_at=$2,verify_hash=NULL,verify_expires=NULL,invite_hash=NULL,guest_hash=$3,guest_expires=$4,receipt=$5,receipt_digest=$6 WHERE id=$1", [row.id,now,digest(session),sessionExpires,seal(receipt.toString("base64"), `receipt:${row.id}`),digest(receipt)]);
       await event(db, row.id, "email_confirmed", "guest", { receiptDigest: digest(receipt) });
       await enqueue(db, row, "guest_receipt", { to: person.email, name: person.name, episode: row.episode });
@@ -171,13 +171,21 @@ export class Authorizations {
     if (!rows[0]) throw new AuthorizationError(404, "No se encontró la autorización.");
     return rows[0];
   }
-  async manage(id: string, action: unknown, actor: string) {
+  async manage(id: string, action: unknown, actor: string, reason?: unknown) {
     return this.db.transaction(async db => {
       const { rows } = await db.query<Authorization>("SELECT * FROM sa_authorizations WHERE id=$1 FOR UPDATE", [validate.uuid(id)]);
       const row = rows[0];
       if (!row) throw new AuthorizationError(404, "No se encontró la autorización.");
+      if (action === "end-retention") {
+        if (row.legal_hold) throw new AuthorizationError(409, "Levanta el bloqueo legal antes de finalizar la conservación.");
+        const explanation = validate.text(reason, "el motivo de finalización", 1000, 20);
+        await db.query("UPDATE sa_authorizations SET retain_until=now(),invite_hash=NULL,guest_hash=NULL,verify_hash=NULL,state=CASE WHEN state='confirmed' THEN state ELSE 'cancelled' END WHERE id=$1", [id]);
+        await db.query("UPDATE sa_outbox SET status='cancelled',payload='' WHERE authorization_id=$1 AND status IN ('queued','failed')", [id]);
+        await event(db, id, "retention_ended", actor, { reason: explanation });
+        return;
+      }
       if (action === "delete") {
-        if (row.legal_hold || date(row.retain_until) > new Date()) throw new AuthorizationError(409, "El expediente tiene conservación vigente o bloqueo legal. Revisa la política antes de eliminarlo.");
+        if (row.legal_hold || !row.retain_until || date(row.retain_until) > new Date()) throw new AuthorizationError(409, "El expediente tiene conservación vigente o bloqueo legal. Revisa la política antes de eliminarlo.");
         await db.query("DELETE FROM sa_authorizations WHERE id=$1", [id]);
         return;
       }

@@ -13,6 +13,16 @@ describe("activation without an approved legal policy", () => {
     expect(readiness().retentionConfigured).toBe(false);
     expect(() => settings()).toThrow("política de conservación");
   });
+  it("requires an explicit policy for an indeterminate term", () => {
+    vi.stubEnv("APP_URL", "https://www.sinanonimato.cl");
+    vi.stubEnv("AUTHORIZATION_RETENTION_MODE", "indefinite");
+    vi.stubEnv("AUTHORIZATION_RETENTION_DAYS", "");
+    vi.stubEnv("AUTHORIZATION_RETENTION_POLICY", "");
+    expect(readiness().retentionConfigured).toBe(false);
+    vi.stubEnv("AUTHORIZATION_RETENTION_POLICY", "Conservación indeterminada mientras exista fundamento y finalidad.");
+    expect(settings().retention).toBeNull();
+    expect(readiness().retentionConfigured).toBe(true);
+  });
   it("rejects unauthenticated cron invocations through both supported methods", async () => {
     vi.stubEnv("CRON_SECRET", "test-only-cron-secret-that-is-long-enough");
     for (const handler of [cronGet, cronPost]) {

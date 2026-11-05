@@ -63,7 +63,7 @@ async function handler(request: Request, context: Context) {
         if (path[1] === "document") return json(await service.createDocument(input, admin.email), 201);
         if (path[1] === "approve") { await service.approveDocument(String(input.id), admin.email, input.approved); return json({ ok: true }); }
         if (path[1] === "retire") { await service.retireDocument(String(input.id)); return json({ ok: true }); }
-        if (path[1] === "manage") { await service.manage(String(input.id), input.action, admin.email); return json({ ok: true }); }
+        if (path[1] === "manage") { await service.manage(String(input.id), input.action, admin.email, input.reason); return json({ ok: true }); }
       }
     }
     return json({ error: "Ruta no disponible." }, 404);
