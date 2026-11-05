@@ -10,7 +10,7 @@ import { useHydrated } from "./use-hydrated";
 export async function authorizationApi(path: string, input?: object) {
   const response = await fetch(`/api/authorizations/${path}`, { method: input ? "POST" : "GET", headers: input ? { "Content-Type": "application/json" } : undefined, body: input ? JSON.stringify(input) : undefined, cache: "no-store" });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "No se pudo completar la solicitud.");
+  if (!response.ok) throw Object.assign(new Error(data.error || "No se pudo completar la solicitud."), { status: response.status });
   return data;
 }
 const demonstration: GuestView = {

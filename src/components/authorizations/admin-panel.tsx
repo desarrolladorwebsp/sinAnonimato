@@ -27,7 +27,7 @@ export function AdminPanel() {
   const [document, setDocument] = useState<LegalDocument | null>(null); const [approved, setApproved] = useState(false);
   const flight = useRef(false);
   async function reload() { setData(await authorizationApi("admin/overview")); }
-  useEffect(() => { let active = true; void authorizationApi("admin/overview").then(result => { if (active) setData(result); }).catch(cause => { if (active) setError(cause.message); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, []);
+  useEffect(() => { let active = true; void authorizationApi("admin/overview").then(result => { if (active) setData(result); }).catch(cause => { if (active && cause.status !== 401) setError(cause.message); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, []);
   async function act(work: () => Promise<void>, success?: string) {
     if (flight.current) return; flight.current = true; setBusy(true); setError(""); setMessage("");
     try { await work(); if (success) setMessage(success); }
