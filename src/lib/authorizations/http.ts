@@ -9,7 +9,7 @@ export const json = (value: unknown, status = 200) => Response.json(value, { sta
 export function sameOrigin(request: Request) {
   if (request.headers.get("origin") !== appOrigin()) throw new AuthorizationError(403, "Solicitud de origen no permitido.");
 }
-export async function body(request: Request) {
+export async function body(request: Request, maxBytes = 180000) {
   if (!request.headers.get("content-type")?.startsWith("application/json")) throw new AuthorizationError(415, "Formato de solicitud inválido.");
   const reader = request.body?.getReader();
   if (!reader) throw new AuthorizationError(400, "Solicitud vacía.");
@@ -17,7 +17,7 @@ export async function body(request: Request) {
   while (true) {
     const { value, done } = await reader.read(); if (done) break;
     size += value.byteLength;
-    if (size > 180000) { await reader.cancel(); throw new AuthorizationError(413, "La solicitud es demasiado grande."); }
+    if (size > maxBytes) { await reader.cancel(); throw new AuthorizationError(413, "La solicitud es demasiado grande."); }
     chunks.push(value);
   }
   try {

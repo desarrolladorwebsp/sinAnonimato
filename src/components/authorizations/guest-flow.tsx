@@ -80,7 +80,7 @@ export function GuestFlow({ confirm = false, demo = false }: { confirm?: boolean
         {phase === "identity" && view && <>
           {heading("Antes de encender los micrófonos.")}
           <p className="authorization-lead">Confirma tus datos para preparar la autorización de tu participación.</p>
-          <p className="authorization-date">Grabación: {localDate(view.recordingAt)}</p>
+          <p className="authorization-date">Grabación: <time dateTime={view.recordingAt}>{hydrated ? localDate(view.recordingAt) : "…"}</time></p>
           <form method="post" onSubmit={event => { event.preventDefault(); setError(""); setPhase("document"); }} className="authorization-form">
             <label>Nombre completo<input name="name" value={name} onChange={event => setName(event.target.value)} required minLength={2} maxLength={120} autoComplete="name" placeholder="Tu nombre y apellidos" /></label>
             <label>RUT<input name="rut" value={rut} onChange={event => setRut(event.target.value)} required maxLength={16} placeholder="12.345.678-5" autoComplete="off" spellCheck={false} /></label>

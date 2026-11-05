@@ -61,7 +61,10 @@ describe("authorizations with an isolated PostgreSQL engine", () => {
   it("consumes an invitation only once and encrypts personal data", async () => {
     const guest = await invitation(); await expect(service.exchange(guest.invitation)).rejects.toThrow();
     const stored = await service.adminRow(guest.id); expect(stored.personal).not.toContain("example.test"); expect(stored.invite_hash).toBeNull();
-    expect(await service.view(guest.session)).toMatchObject({ state: "invited", email: "invitado@example.test" });
+    const view = await service.view(guest.session);
+    expect(view).toMatchObject({ state: "invited", email: "invitado@example.test" });
+    expect(view.document).not.toHaveProperty("approved_by");
+    expect(view.document).not.toHaveProperty("created_at");
   });
   it("requires explicit acceptance and the presented document digest, rejecting invalid RUTs", async () => {
     const guest = await invitation(); const view = await service.view(guest.session);

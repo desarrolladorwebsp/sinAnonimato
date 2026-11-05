@@ -94,7 +94,10 @@ export class Authorizations {
   async view(session: unknown): Promise<GuestView> {
     const row = await this.guestRow(session);
     const person = personOf(row);
-    return { id: row.id, name: person.name, email: person.email, episode: row.episode, recordingAt: date(row.recording_at).toISOString(), state: row.state, document: await documentOf(this.db, row.document_id), retentionPolicy: person.retentionPolicy, acceptedAt: row.accepted_at ? date(row.accepted_at).toISOString() : null, confirmedAt: row.confirmed_at ? date(row.confirmed_at).toISOString() : null };
+    const legal = await documentOf(this.db, row.document_id);
+    // Explicit projection keeps internal approver emails and metadata out of guest responses.
+    const document = { id: legal.id, title: legal.title, version: legal.version, content: legal.content, privacy: legal.privacy, acceptance: legal.acceptance, digest: legal.digest, approved_at: legal.approved_at, retired_at: legal.retired_at };
+    return { id: row.id, name: person.name, email: person.email, episode: row.episode, recordingAt: date(row.recording_at).toISOString(), state: row.state, document, retentionPolicy: person.retentionPolicy, acceptedAt: row.accepted_at ? date(row.accepted_at).toISOString() : null, confirmedAt: row.confirmed_at ? date(row.confirmed_at).toISOString() : null };
   }
   async verification(db: Connection, row: Authorization, personal: Personal) {
     const verification = token();

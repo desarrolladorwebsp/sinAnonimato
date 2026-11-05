@@ -2,7 +2,8 @@ import { betterAuth } from "better-auth";
 import { emailOTP } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
 import { APIError, createAuthMiddleware } from "better-auth/api";
-import { pool } from "./authorizations/db";
+import { database, pool } from "./authorizations/db";
+import { rateLimit } from "./authorizations/http";
 import { adminRole, AuthorizationError, appOrigin } from "./authorizations/config";
 import { sendAdminCode } from "./authorizations/mail";
 
@@ -24,6 +25,13 @@ function buildAuth() {
       if (!allowed.has(ctx.path)) throw new APIError("FORBIDDEN", { message: "Operación no disponible." });
       if (ctx.body?.email && !adminRole(String(ctx.body.email))) throw new APIError("FORBIDDEN", { message: "Acceso disponible solo para el equipo autorizado." });
       if (ctx.path === "/email-otp/send-verification-otp" && ctx.body?.type !== "sign-in") throw new APIError("FORBIDDEN");
+      if (ctx.path === "/email-otp/send-verification-otp") {
+        try { await rateLimit(database(), `admin-code:${String(ctx.body?.email).trim().toLowerCase()}`, 3, 300); }
+        catch (error) {
+          if (error instanceof AuthorizationError && error.status === 429) throw new APIError("TOO_MANY_REQUESTS", { message: "Espera cinco minutos antes de solicitar más códigos." });
+          throw error;
+        }
+      }
     }) },
     databaseHooks: { user: { create: { before: async user => {
       if (!adminRole(user.email)) throw new APIError("FORBIDDEN");

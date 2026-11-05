@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { POST } from "@/app/api/contacto/route";
 import {
   ContactMailError,
@@ -10,6 +10,11 @@ import {
 } from "@/lib/send-contact";
 
 const send = vi.hoisted(() => vi.fn());
+const quota = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/authorizations/http", async importOriginal => ({
+  ...await importOriginal<typeof import("@/lib/authorizations/http")>(), rateLimit: quota,
+}));
+beforeEach(() => vi.stubEnv("APP_URL", "http://localhost"));
 
 vi.mock("resend", () => ({
   Resend: class {
@@ -39,6 +44,8 @@ afterEach(() => {
   restore("RESEND_API_KEY", originalKey);
   restore("RESEND_FROM", originalFrom);
   send.mockReset();
+  quota.mockReset();
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
 
@@ -112,13 +119,13 @@ test("el endpoint rechaza datos inválidos y falta de clave", async () => {
   delete process.env.RESEND_API_KEY;
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-  const invalid = await POST(new Request("http://localhost/api/contacto", { method: "POST", body: "{" }));
+  const invalid = await POST(new Request("http://localhost/api/contacto", { method: "POST", headers: { Origin: "http://localhost", "Content-Type": "application/json" }, body: "{" }));
   expect(invalid.status).toBe(400);
 
   const missing = await POST(
     new Request("http://localhost/api/contacto", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { Origin: "http://localhost", "Content-Type": "application/json" },
       body: JSON.stringify(message),
     }),
   );
@@ -134,7 +141,7 @@ test("el endpoint envía el formulario cuando Resend responde", async () => {
   const response = await POST(
     new Request("http://localhost/api/contacto", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { Origin: "http://localhost", "Content-Type": "application/json" },
       body: JSON.stringify(message),
     }),
   );

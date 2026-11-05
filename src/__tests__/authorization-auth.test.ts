@@ -24,6 +24,7 @@ beforeAll(async () => {
   vi.stubEnv("AUTHORIZATION_RETENTION_DAYS", "365"); vi.stubEnv("AUTHORIZATION_RETENTION_POLICY", "Política de prueba.");
   vi.stubEnv("AUTHORIZATION_ADMIN_EMAILS", "admin@example.test"); vi.stubEnv("AUTHORIZATION_PRODUCTION_EMAILS", "production@example.test");
   await (await getMigrations(getAuth().options)).runMigrations();
+  await state.pg.exec("CREATE TABLE sa_rate_limits(key text PRIMARY KEY,hits integer NOT NULL,reset_at timestamptz NOT NULL)");
 }, 30000);
 afterAll(async () => { await state.pg.close(); vi.unstubAllEnvs(); });
 const authRequest = (path: string, body: unknown) => authRoute(new Request(`http://localhost:3000/api/auth${path}`, { method: "POST", headers: { Origin: "http://localhost:3000", "Content-Type": "application/json" }, body: JSON.stringify(body) }));
@@ -50,5 +51,16 @@ describe("real Better Auth handlers with an isolated PostgreSQL adapter", () => 
     await expect(requireAdmin(new Headers())).rejects.toThrow();
     const response = await authRoute(new Request("http://localhost:3000/api/auth/email-otp/send-verification-otp", { method: "POST", headers: { Origin: "https://attacker.example", "Content-Type": "application/json" }, body: JSON.stringify({ email: "admin@example.test", type: "sign-in" }) }));
     expect(response.status).toBe(403);
+  });
+  it("bounds login payloads before parsing or sending any code", async () => {
+    const result = await authRequest("/email-otp/send-verification-otp", { email: "admin@example.test", type: "sign-in", oversized: "x".repeat(9000) });
+    expect(result.status).toBe(413);
+    expect(state.codes.has("admin@example.test")).toBe(false);
+  });
+  it("limits code requests by recipient even when the source address changes", async () => {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const response = await authRoute(new Request("http://localhost:3000/api/auth/email-otp/send-verification-otp", { method: "POST", headers: { Origin: "http://localhost:3000", "Content-Type": "application/json", "x-forwarded-for": `192.0.2.${attempt + 1}` }, body: JSON.stringify({ email: "admin@example.test", type: "sign-in" }) }));
+      expect(response.status).toBe(attempt < 3 ? 200 : 429);
+    }
   });
 });

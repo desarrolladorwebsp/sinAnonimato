@@ -51,10 +51,12 @@ export function SiteFooter() {
         transition={{ duration: 0.55, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
       >
         <p>© 2025 Sin Anonimato · Live. Todos los derechos reservados.</p>
-        <p className="flex gap-3">
+        <p className="flex flex-wrap gap-3">
           <a href="#contacto">Política de privacidad</a>
           <span aria-hidden="true">|</span>
           <a href="#contacto">Términos y condiciones</a>
+          <span aria-hidden="true">|</span>
+          <a href="/admin/autorizaciones" className="rounded-sm hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">Admin</a>
         </p>
       </motion.div>
     </footer>
