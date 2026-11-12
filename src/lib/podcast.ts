@@ -10,6 +10,7 @@ const firstEpisode: Episode = {
   duration: "",
   publishedAt: "",
   embeddable: true,
+  thumbnailSize: "maxresdefault",
 };
 
 type Uploads = { items: { contentDetails: { relatedPlaylists: { uploads: string } } }[] };
