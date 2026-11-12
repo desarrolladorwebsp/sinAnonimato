@@ -3,7 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import Page from "../app/page";
 import { StoryForm } from "@/components/story-form";
 vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
-vi.mock("@/lib/podcast", () => ({ getEpisodes: async () => [{ id: "xNfdDPhmEMU", title: "Capítulo 1", description: "El primer capítulo.", duration: "", publishedAt: "", embeddable: true }] }));
+vi.mock("@/lib/podcast", () => ({ getEpisodes: async () => [{ id: "xNfdDPhmEMU", title: "Capítulo 1: Artistas callejeros", description: "El primer capítulo.", duration: "", publishedAt: "", embeddable: true }] }));
 vi.mock("@/components/review-carousel", () => ({ ReviewsSection: () => null }));
 
 afterEach(() => {
@@ -33,7 +33,7 @@ test("muestra el último capítulo, Shorts, formulario y pie", async () => {
   render(await Page());
 
   expect(
-    screen.getByRole("heading", { level: 1, name: "Capítulo 1" }),
+    screen.getByRole("heading", { level: 1, name: "Capítulo 1: Artistas callejeros" }),
   ).toBeInTheDocument();
   expect(
     screen.getByRole("heading", { level: 2, name: /envíanos tu caso/i }),

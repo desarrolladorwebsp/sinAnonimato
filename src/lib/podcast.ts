@@ -5,7 +5,7 @@ export type { Episode } from "./episode";
 
 const firstEpisode: Episode = {
   id: "xNfdDPhmEMU",
-  title: "Capítulo 1",
+  title: "Capítulo 1: Artistas callejeros",
   description: "El primer capítulo de Sin Anonimato.",
   duration: "",
   publishedAt: "",
@@ -72,7 +72,7 @@ export const getEpisodes = cache(async (): Promise<Episode[]> => {
           const thumbnails = video.snippet.thumbnails;
           episodes.set(video.id, {
             id: video.id,
-            title: video.snippet.title,
+            title: video.id === firstEpisode.id ? firstEpisode.title : video.snippet.title,
             description: video.snippet.description,
             duration: video.contentDetails.duration,
             publishedAt: video.snippet.publishedAt,
