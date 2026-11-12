@@ -1,6 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import Page from "../app/page";
+import { StoryForm } from "@/components/story-form";
+vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
+vi.mock("@/lib/podcast", () => ({ getEpisodes: async () => [{ id: "xNfdDPhmEMU", title: "Capítulo 1", description: "El primer capítulo.", duration: "", publishedAt: "", embeddable: true }] }));
+vi.mock("@/components/review-carousel", () => ({ ReviewsSection: () => null }));
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -25,11 +29,11 @@ vi.mock("next/image", () => ({
   default: () => null,
 }));
 
-test("muestra el hero, el formulario y el pie", () => {
-  render(<Page />);
+test("muestra el último capítulo, Shorts, formulario y pie", async () => {
+  render(await Page());
 
   expect(
-    screen.getByRole("heading", { level: 1, name: "Próximamente" }),
+    screen.getByRole("heading", { level: 1, name: "Capítulo 1" }),
   ).toBeInTheDocument();
   expect(
     screen.getByRole("heading", { level: 2, name: /envíanos tu caso/i }),
@@ -40,11 +44,13 @@ test("muestra el hero, el formulario y el pie", () => {
   expect(
     screen.getByLabelText("Cuéntanos brevemente tu caso."),
   ).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Ver último capítulo" })).toHaveAttribute("href", "/capitulos/xNfdDPhmEMU");
+  expect(screen.getByRole("heading", { name: "Historias en pocos minutos." })).toBeInTheDocument();
   expect(screen.getByText(/todos los derechos reservados/i)).toBeInTheDocument();
 });
 
 test("el formulario pide los datos obligatorios", () => {
-  render(<Page />);
+  render(<StoryForm />);
 
   fireEvent.click(screen.getByRole("button", { name: /enviar mi caso/i }));
 
@@ -60,7 +66,7 @@ test("envía el caso y confirma que llegará un correo", async () => {
     json: async () => ({ ok: true, confirmationSent: true }),
   });
   vi.stubGlobal("fetch", fetchMock);
-  render(<Page />);
+  render(<StoryForm />);
   fillCase();
 
   fireEvent.click(screen.getByRole("button", { name: /enviar mi caso/i }));
@@ -94,7 +100,7 @@ test("avisa si el envío falla y conserva los datos", async () => {
       json: async () => ({ ok: false }),
     }),
   );
-  render(<Page />);
+  render(<StoryForm />);
   fillCase();
 
   fireEvent.click(screen.getByRole("button", { name: /enviar mi caso/i }));

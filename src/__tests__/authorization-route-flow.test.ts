@@ -9,8 +9,8 @@ vi.mock("@/lib/authorizations/db", () => ({ database: () => state.db }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: (key:string) => state.jar.has(key) ? { value: state.jar.get(key) } : undefined, set: (key:string,value:string) => { if(value) state.jar.set(key,value); else state.jar.delete(key); } }) }));
 vi.mock("next/server", () => ({ after: state.after }));
 vi.mock("@/lib/auth", () => ({ requireAdmin: async (headers:Headers) => {
-  if(headers.get("x-fixture-admin") !== "yes") { const { AuthorizationError } = await import("@/lib/authorizations/config"); throw new AuthorizationError(401,"Acceso requerido"); }
-  return { email: "admin@example.test", role: "admin" };
+  if(!["yes", "production"].includes(headers.get("x-fixture-admin") ?? "")) { const { AuthorizationError } = await import("@/lib/authorizations/config"); throw new AuthorizationError(401,"Acceso requerido"); }
+  return { email: "admin@example.test", role: headers.get("x-fixture-admin") === "production" ? "production" : "admin" };
 } }));
 import { POST, GET } from "@/app/api/authorizations/[...path]/route";
 const pg = new PGlite();
@@ -18,12 +18,12 @@ function connection(target: Pick<PGlite,"query">):Connection { return { async qu
 beforeAll(async () => {
   vi.stubEnv("APP_URL","http://localhost:3000"); vi.stubEnv("AUTHORIZATION_ENCRYPTION_KEY","a".repeat(64)); vi.stubEnv("AUTHORIZATION_RETENTION_DAYS","365"); vi.stubEnv("AUTHORIZATION_RETENTION_POLICY","Conservación ficticia de prueba"); vi.stubEnv("PRODUCTION_EMAIL","production@example.test");
   state.db={...connection(pg),transaction:work=>pg.transaction(tx=>work(connection(tx)))};
-  for(const name of ["001_authorizations.sql","002_indefinite_retention.sql","003_production_confirmation.sql"]) await pg.exec(await readFile(`migrations/${name}`,"utf8"));
+  for(const name of ["001_authorizations.sql","002_indefinite_retention.sql","003_production_confirmation.sql","004_reviews.sql"]) await pg.exec(await readFile(`migrations/${name}`,"utf8"));
 });
-beforeEach(async()=>{ state.jar.clear();state.after.mockClear();await pg.exec("TRUNCATE sa_events,sa_outbox,sa_authorizations,sa_documents,sa_rate_limits CASCADE"); });
+beforeEach(async()=>{ state.jar.clear();state.after.mockClear();await pg.exec("TRUNCATE sa_events,sa_outbox,sa_authorizations,sa_documents,sa_rate_limits,sa_reviews CASCADE"); });
 afterAll(async()=>{ await pg.close();vi.unstubAllEnvs(); });
-async function call(path:string,input?:object,admin=false) {
-  const request=new Request(`http://localhost:3000/api/authorizations/${path}`,{method:input ? "POST":"GET",headers:{Origin:"http://localhost:3000","Content-Type":"application/json",...(admin ? {"x-fixture-admin":"yes"}: {})},body:input ? JSON.stringify(input):undefined});
+async function call(path:string,input?:object,admin: boolean | "production" = false) {
+  const request=new Request(`http://localhost:3000/api/authorizations/${path}`,{method:input ? "POST":"GET",headers:{Origin:"http://localhost:3000","Content-Type":"application/json",...(admin ? {"x-fixture-admin":admin === true ? "yes" : admin}: {})},body:input ? JSON.stringify(input):undefined});
   return (input?POST:GET)(request,{params:Promise.resolve({path:path.split("/")})});
 }
 async function mailToken(kind:string) {
@@ -67,4 +67,40 @@ it("rejects through the admin route and blocks unauthorized decisions and guest 
   expect((await call("guest/me")).status).not.toBe(200);
   expect((await call("admin/receipt/"+id,undefined,true)).status).toBe(409);
   expect((await pg.query<{state:string}>("SELECT state FROM sa_authorizations WHERE id=$1",[id])).rows[0].state).toBe("rejected");
+});
+
+it("publishes and removes real review records through authenticated routes", async () => {
+  const input = {
+    action: "add",
+    author: "Persona de prueba",
+    platform: "YouTube",
+    comment: "Comentario ficticio para la prueba de integración.",
+    sourceUrl: "https://youtu.be/example",
+  };
+  expect((await call("admin/reviews", input)).status).toBe(401);
+  expect((await call("admin/reviews", input, "production")).status).toBe(403);
+  expect((await call("public/reviews", input, true)).status).toBe(404);
+  expect((await call("admin/reviews", { ...input, sourceUrl: "https://youtube.com.example.test/watch" }, true)).status).toBe(400);
+  expect((await call("admin/reviews", { ...input, platform: "Otra" }, true)).status).toBe(400);
+  expect(await (await call("public/reviews")).json()).toEqual([]);
+
+  const created = await call("admin/reviews", input, true);
+  expect(created.status).toBe(201);
+  const review = await created.json();
+  expect(review).toEqual({
+    id: expect.any(String),
+    author: input.author,
+    platform: input.platform,
+    comment: input.comment,
+    sourceUrl: input.sourceUrl,
+  });
+  const published = await call("public/reviews");
+  expect(published.headers.get("cache-control")).toContain("no-store");
+  expect(await published.json()).toEqual([review]);
+  expect(await (await call("admin/reviews", undefined, true)).json()).toEqual([review]);
+
+  const removal = { action: "delete", id: review.id };
+  expect((await call("admin/reviews", removal, "production")).status).toBe(403);
+  expect((await call("admin/reviews", removal, true)).status).toBe(200);
+  expect(await (await call("public/reviews")).json()).toEqual([]);
 });

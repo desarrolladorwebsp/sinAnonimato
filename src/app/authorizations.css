@@ -62,3 +62,10 @@ html:has(.authorization-shell) { scroll-snap-type: none; scroll-behavior: auto; 
   .authorization-table td::before { content: attr(data-label); display: block; font-size: 10px; color: #aaa; margin-bottom: 4px; }
   .authorization-row-actions { min-width: 0; }
 }
+
+.authorization-tabs { flex-wrap: wrap; row-gap: .25rem; }
+.review-admin-grid { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1fr); gap: 2rem; margin-top: 1.5rem; }
+.review-admin-list { margin: .75rem 0 0; padding: 0; list-style: none; }
+.review-admin-list li { padding: .9rem 0; border-top: 1px solid #ffffff24; overflow-wrap: anywhere; }
+.review-admin-list li p { white-space: pre-line; }
+@media (max-width: 720px) { .review-admin-grid { grid-template-columns: minmax(0, 1fr); } }

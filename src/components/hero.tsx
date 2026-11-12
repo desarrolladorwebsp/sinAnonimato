@@ -30,26 +30,28 @@ export function Hero() {
         </h1>
         <motion.p
           className="hero-kicker mt-8 max-w-3xl font-semibold uppercase"
-          initial={reduce ? false : { opacity: 0, y: 10, filter: "blur(5px)" }}
-          animate={reduce || active ? { opacity: 1, y: 0, filter: "blur(0px)" } : { opacity: 0, y: 10, filter: "blur(5px)" }}
-          transition={{ duration: 0.7, delay: active ? 0.6 : 0, ease }}
+          initial={reduce ? false : { opacity: 0, x: -36, skewX: 5 }}
+          animate={reduce || active ? { opacity: 1, x: 0, skewX: 0 } : { opacity: 0, x: -36, skewX: 5 }}
+          transition={{ duration: 0.8, delay: active ? 0.34 : 0, ease }}
         >
           Tu historia puede hacer la diferencia
         </motion.p>
         <motion.p
           className="hero-copy mt-5 max-w-xl text-white/75"
-          initial={reduce ? false : { opacity: 0, y: 8 }}
-          animate={reduce || active ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
-          transition={{ duration: 0.7, delay: active ? 0.85 : 0, ease }}
+          initial={reduce ? false : { opacity: 0, y: 24, scale: 0.97 }}
+          animate={reduce || active ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 24, scale: 0.97 }}
+          transition={{ duration: 0.85, delay: active ? 0.56 : 0, ease }}
         >
           Un espacio para escuchar, visibilizar y dar voz a las historias que importan.
         </motion.p>
         <motion.a
           href="#contacto"
           className="editorial-link hero-cta mt-8"
-          initial={reduce ? false : { opacity: 0, y: 8 }}
-          animate={reduce || active ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
-          transition={{ duration: 0.6, delay: active ? 1.05 : 0, ease }}
+          initial={reduce ? false : { opacity: 0, y: 22, scale: 0.94 }}
+          animate={reduce || active ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 22, scale: 0.94 }}
+          whileHover={reduce ? undefined : { scale: 1.045, y: -3 }}
+          whileTap={reduce ? undefined : { scale: 0.97 }}
+          transition={{ duration: 0.7, delay: active ? 0.78 : 0, ease }}
         >
           Cuéntanos tu historia <ArrowUpRight size={20} aria-hidden="true" />
         </motion.a>

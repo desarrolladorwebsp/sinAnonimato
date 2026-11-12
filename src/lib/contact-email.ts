@@ -179,11 +179,14 @@ export function clientConfirmationEmail(message: ContactMessage): RenderedEmail 
 export function teamNotificationEmail(
   message: ContactMessage,
   receivedAt: Date,
+  sponsorCompany?: string,
 ): RenderedEmail {
+  const title = sponsorCompany ? "Nueva consulta de auspicio" : "Un cliente quiere contactarnos";
+  const messageLabel = sponsorCompany ? "Idea de auspicio" : "Historia";
   const rows = [
     ["Nombre", message.name],
     ["Correo", message.email],
-    ["Teléfono", message.phone || "No lo indicó"],
+    sponsorCompany ? ["Marca o empresa", sponsorCompany] : ["Teléfono", message.phone || "No lo indicó"],
     ["Recibido", formatReceivedAt(receivedAt)],
   ];
 
@@ -196,23 +199,23 @@ export function teamNotificationEmail(
       const border = index === rows.length - 1 ? "" : "email-row";
       return `<p class="${border}" style="margin:0;padding:10px 0;${border ? "border-bottom:1px solid #e4e4e4;" : ""}font-size:14px;line-height:1.5;"><span class="email-label" style="display:block;margin-bottom:2px;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6b6b6b;">${escapeHtml(label)}</span>${valueHtml}</p>`;
     }),
-    `<p class="email-label" style="margin:16px 0 8px;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6b6b6b;">Historia</p>`,
+    `<p class="email-label" style="margin:16px 0 8px;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6b6b6b;">${messageLabel}</p>`,
     `<p class="email-text" style="margin:0;font-size:15px;line-height:1.65;color:#1a1a1a;">${toHtml(message.story)}</p>`,
   ].join("");
 
   return {
-    subject: `Nuevo contacto: ${subjectName(message.name)}`,
+    subject: sponsorCompany ? `Consulta de auspicio: ${subjectName(sponsorCompany)}` : `Nuevo contacto: ${subjectName(message.name)}`,
     text: [
       "Sin Anonimato",
       "",
-      "Un cliente quiere contactarnos.",
+      `${title}.`,
       "",
       `Nombre: ${message.name}`,
       `Correo: ${message.email}`,
-      `Teléfono: ${message.phone || "No lo indicó"}`,
+      sponsorCompany ? `Marca o empresa: ${sponsorCompany}` : `Teléfono: ${message.phone || "No lo indicó"}`,
       `Recibido: ${formatReceivedAt(receivedAt)}`,
       "",
-      "Historia:",
+      `${messageLabel}:`,
       message.story,
       "",
       "Responder a este mensaje escribe directamente a la persona.",
@@ -221,8 +224,8 @@ export function teamNotificationEmail(
     ].join("\n"),
     html: layout({
       preheader: `${message.name} envió el formulario de contacto.`,
-      eyebrow: "Nuevo caso",
-      title: "Un cliente quiere contactarnos",
+      eyebrow: sponsorCompany ? "Auspicios" : "Nuevo caso",
+      title,
       paragraphs: [
         "Llegó un formulario desde el sitio. Estos son los datos para responder.",
       ],

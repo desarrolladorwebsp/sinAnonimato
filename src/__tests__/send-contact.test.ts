@@ -150,3 +150,34 @@ test("el endpoint envía el formulario cuando Resend responde", async () => {
   await expect(response.json()).resolves.toEqual({ ok: true, confirmationSent: true });
   expect(send).toHaveBeenCalledTimes(2);
 });
+
+test("envía una consulta de auspicio solo al buzón del equipo", async () => {
+  process.env.RESEND_API_KEY = "re_test";
+  delete process.env.RESEND_FROM;
+  send.mockResolvedValue({ data: { id: "sponsorship_test" }, error: null });
+  const sponsorRequest = (company: string) => new Request("http://localhost/api/contacto", {
+    method: "POST",
+    headers: { Origin: "http://localhost", "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...message,
+      kind: "sponsorship",
+      company,
+      story: "Queremos conversar sobre una colaboración.",
+      to: "otro@example.test",
+    }),
+  });
+
+  expect((await POST(sponsorRequest(" "))).status).toBe(400);
+  expect(send).not.toHaveBeenCalled();
+
+  const response = await POST(sponsorRequest("Marca <Ejemplo>"));
+  expect(response.status).toBe(200);
+  expect(send).toHaveBeenCalledTimes(1);
+  expect(send.mock.calls[0]?.[0]).toMatchObject({
+    to: "contacto@sinanonimato.cl",
+    replyTo: message.email,
+    subject: "Consulta de auspicio: Marca <Ejemplo>",
+    html: expect.stringContaining("Marca &lt;Ejemplo&gt;"),
+    text: expect.stringContaining("Queremos conversar sobre una colaboración."),
+  });
+});

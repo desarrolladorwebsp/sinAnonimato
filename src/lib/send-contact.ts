@@ -67,13 +67,12 @@ export async function readLogoAttachment(): Promise<MailAttachment> {
 export async function deliverContact(
   message: ContactMessage,
   send: (mail: OutboundMail) => Promise<void>,
-  options?: { receivedAt?: Date; logo?: MailAttachment },
+  options?: { receivedAt?: Date; logo?: MailAttachment; sponsorCompany?: string },
 ) {
   const receivedAt = options?.receivedAt ?? new Date();
   const from = resolveFromAddress();
   const logo = options?.logo ?? (await readLogoAttachment());
-  const team = teamNotificationEmail(message, receivedAt);
-  const client = clientConfirmationEmail(message);
+  const team = teamNotificationEmail(message, receivedAt, options?.sponsorCompany);
 
   await send({
     from,
@@ -86,6 +85,9 @@ export async function deliverContact(
     category: "team",
   });
 
+  if (options?.sponsorCompany) return { confirmationSent: false };
+
+  const client = clientConfirmationEmail(message);
   try {
     await send({
       from,

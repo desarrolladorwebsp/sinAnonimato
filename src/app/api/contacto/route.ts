@@ -13,7 +13,7 @@ function fieldSource(payload: unknown) {
   return {
     name: record.name,
     email: record.email,
-    phone: record.phone,
+    phone: record.kind === "sponsorship" ? "" : record.phone,
     story: record.story,
   };
 }
@@ -28,6 +28,15 @@ export async function POST(request: Request) {
     return Response.json({ ok: false }, { status: error instanceof AuthorizationError ? error.status : 400, headers: privateHeaders });
   }
 
+  const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+  const isSponsorship = record.kind === "sponsorship";
+  const sponsorCompany = typeof record.company === "string"
+    ? record.company.replace(/[\u0000\r\n]/g, " ").trim()
+    : "";
+  if (isSponsorship && (sponsorCompany.length < 2 || sponsorCompany.length > 120)) {
+    return Response.json({ ok: false }, { status: 400, headers: privateHeaders });
+  }
+
   const { value, errors } = validateContact(fieldSource(payload));
 
   if (!value) {
@@ -40,7 +49,9 @@ export async function POST(request: Request) {
     // Persistent quotas work across serverless instances and do not store IPs or raw emails.
     await rateLimit(db, "contact:global", 10, 60);
     await rateLimit(db, `contact:recipient:${value.email.toLowerCase()}`, 2, 600);
-    const result = await deliverContact(value, transport);
+    const result = isSponsorship
+      ? await deliverContact(value, transport, { sponsorCompany })
+      : await deliverContact(value, transport);
     return Response.json({ ok: true, confirmationSent: result.confirmationSent }, { headers: privateHeaders });
   } catch (error) {
     if (error instanceof AuthorizationError) return Response.json({ ok: false }, { status: error.status, headers: privateHeaders });

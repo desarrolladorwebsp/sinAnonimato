@@ -1,7 +1,10 @@
 export const navItems = [
   { href: "#inicio", label: "Inicio" },
+  { href: "/capitulos", label: "Capítulos" },
+  { href: "#shorts", label: "YouTube Shorts" },
+  { href: "#reels", label: "Instagram" },
+  { href: "#auspiciadores", label: "Auspiciadores" },
   { href: "#quienes-somos", label: "Quiénes somos" },
-  { href: "#historias", label: "Historias" },
   { href: "#contacto", label: "Contacto" },
 ] as const;
 
@@ -17,13 +20,8 @@ export const socials = [
     cue: "Visítanos",
   },
   {
-    href: "#contacto",
+    href: "https://www.youtube.com/@SinAnonimato",
     platform: "YouTube",
     cue: "Míranos",
-  },
-  {
-    href: "#contacto",
-    platform: "TikTok",
-    cue: "Únete",
   },
 ] as const;

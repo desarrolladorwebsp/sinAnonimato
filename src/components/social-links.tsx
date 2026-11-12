@@ -3,7 +3,6 @@
 import {
   FacebookLogo,
   InstagramLogo,
-  TiktokLogo,
   YoutubeLogo,
   type Icon,
 } from "@phosphor-icons/react";
@@ -13,7 +12,6 @@ const icons: Record<(typeof socials)[number]["platform"], Icon> = {
   Instagram: InstagramLogo,
   Facebook: FacebookLogo,
   YouTube: YoutubeLogo,
-  TikTok: TiktokLogo,
 };
 
 type SocialLinksProps = {

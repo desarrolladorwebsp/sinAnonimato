@@ -5,6 +5,7 @@ import { database } from "@/lib/authorizations/db";
 import { digest } from "@/lib/authorizations/crypto";
 import { body, guestSession, json, privateHeaders, rateLimit, sameOrigin, setGuest, setConfirmation, confirmationToken, clearConfirmation } from "@/lib/authorizations/http";
 import { processOutbox } from "@/lib/authorizations/mail";
+import { addReview, deleteReview, listReviews } from "@/lib/reviews";
 import { Authorizations } from "@/lib/authorizations/service";
 
 export const runtime = "nodejs";
@@ -16,6 +17,9 @@ async function handler(request: Request, context: Context) {
     const db = database(); const service = new Authorizations(db);
     const method = request.method;
     if (method === "POST") sameOrigin(request);
+    if (method === "GET" && path.length === 2 && path[0] === "public" && path[1] === "reviews") {
+      return json(await listReviews(db));
+    }
     if (path[0] === "guest") {
       const session = await guestSession();
       // Shared persistent quota for unknown sessions prevents distributed token guessing;
@@ -40,6 +44,19 @@ async function handler(request: Request, context: Context) {
     if (path[0] === "admin") {
       const admin = await requireAdmin(request.headers);
       await rateLimit(db, `admin:${admin.email}`, 90);
+      if (path.length === 2 && path[1] === "reviews") {
+        if (admin.role !== "admin") throw new AuthorizationError(403, "Solo administración puede gestionar reseñas.");
+        if (method === "GET") return json(await listReviews(db));
+        if (method === "POST") {
+          const input = await body(request, 8192);
+          if (input.action === "add") return json(await addReview(db, input), 201);
+          if (input.action === "delete") {
+            await deleteReview(db, input.id);
+            return json({ ok: true });
+          }
+          throw new AuthorizationError(400, "Acción de reseñas inválida.");
+        }
+      }
       if (method === "GET" && path[1] === "overview") {
         const [documents, authorizations, jobs] = await Promise.all([
           db.query("SELECT * FROM sa_documents ORDER BY created_at DESC"),

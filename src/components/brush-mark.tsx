@@ -22,7 +22,7 @@ export function BrushMark({ children, className = "", active }: BrushMarkProps) 
   const letters = Array.from(children);
 
   return (
-    <span className={`brush-mark relative inline-block whitespace-nowrap px-12 py-3 ${className}`}>
+    <span className={`brush-mark relative inline-block whitespace-nowrap px-12 py-3 ${className}`} data-active={active === undefined ? "false" : active || reduce ? "true" : "false"}>
       <span
         aria-hidden="true"
         className="brush-mark-paint pointer-events-none absolute top-1/2 left-1/2 h-[185%] w-[114%] -translate-x-1/2 -translate-y-[58%] -rotate-1"
@@ -73,14 +73,15 @@ export function BrushMark({ children, className = "", active }: BrushMarkProps) 
             <motion.span
               key={`${letter}-${index}`}
               className="inline-block"
-              initial={reduce ? false : { opacity: 0, y: 14, filter: "blur(6px)" }}
-              animate={active === undefined ? undefined : reduce || active ? { opacity: 1, y: 0, filter: "blur(0px)" } : { opacity: 0, y: 14, filter: "blur(6px)" }}
-              whileInView={active === undefined ? { opacity: 1, y: 0, filter: "blur(0px)" } : undefined}
+              initial={reduce ? false : { opacity: 0, y: 34, rotate: 6, scale: 0.88 }}
+              animate={active === undefined ? undefined : reduce || active ? { opacity: 1, y: 0, rotate: 0, scale: 1 } : { opacity: 0, y: 34, rotate: 6, scale: 0.88 }}
+              whileInView={active === undefined && !reduce ? { opacity: 1, y: 0, rotate: 0, scale: 1 } : undefined}
               viewport={{ once: false, amount: 0.6 }}
               transition={{
-                duration: 0.38,
-                delay: active === false ? 0 : 0.12 + index * 0.045,
-                ease: [0.16, 1, 0.3, 1],
+                type: "spring",
+                stiffness: 220,
+                damping: 18,
+                delay: active === false ? 0 : 0.08 + index * 0.025,
               }}
             >
               {letter === " " ? "\u00a0" : letter}

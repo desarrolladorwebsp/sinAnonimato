@@ -1,0 +1,127 @@
+.reviews-section {
+  padding-block: clamp(2rem, 5vw, 4.25rem);
+  border-block: 1px solid var(--podcast-line);
+  background: linear-gradient(145deg, #160e11, #0a090a 55%);
+}
+.reviews-heading { display: flex; align-items: end; justify-content: space-between; gap: .9rem; margin-bottom: 1.05rem; }
+.podcast-section-title {
+  margin: .35rem 0 0; font-size: clamp(1.65rem, 3.1vw, 2.75rem);
+  line-height: 1.1; letter-spacing: -.045em; font-weight: 850; text-wrap: balance;
+}
+.reviews-controls { display: flex; flex-shrink: 0; gap: .5rem; }
+.reviews-controls button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #ffffff30;
+  border-radius: 5px;
+  background: #161616;
+}
+.reviews-controls button:hover { border-color: var(--accent); }
+.reviews-controls button:focus-visible, .reviews-track:focus-visible, .review-card a:focus-visible {
+  outline: 2px solid #ff6868;
+  outline-offset: 2px;
+}
+.reviews-track {
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: calc((100% - 2rem) / 3);
+  gap: 1rem;
+  margin: 0;
+  padding: 0 0 .65rem;
+  list-style: none;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  scrollbar-color: #744349 #171717;
+}
+.review-card {
+  display: flex; min-width: 0; min-height: 195px; padding: 1.05rem;
+  border: 1px solid var(--podcast-line); border-radius: var(--podcast-radius);
+  background: #151214; scroll-snap-align: start; overflow-wrap: anywhere;
+}
+.review-card figure { display: flex; flex-direction: column; flex: 1; gap: .7rem; margin: 0; }
+.review-quote-mark { flex: none; color: var(--podcast-accent); }
+.review-card blockquote { margin: 0; color: #f4efef; font-size: clamp(.9rem, 1.25vw, 1rem); font-weight: 550; line-height: 1.55; white-space: pre-line; }
+.review-card figcaption { display: flex; align-items: center; gap: .6rem; margin-top: auto; padding-top: .5rem; font-size: .79rem; }
+.review-card figcaption strong { display: block; }
+.review-platform-icon { display: grid; place-items: center; width: 32px; height: 32px; flex: none; color: var(--podcast-accent); }
+.review-platform-label, .review-card figcaption a { display: block; color: var(--muted); font-size: .74rem; }
+.review-card figcaption a:hover { text-decoration: underline; }
+.reviews-empty {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1.25rem;
+  min-height: 176px;
+  padding: clamp(1.25rem, 4vw, 2.5rem);
+  border: 1px solid #ffffff24;
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: radial-gradient(ellipse at 5% 50%, #35151c 0, #171313 45%, #111 100%);
+}
+.reviews-empty-mark { display: grid; place-items: center; width: 58px; height: 58px; border: 1px solid #ff697055; border-radius: 50%; color: #ff6970; }
+.reviews-empty-title { margin: 0 0 .45rem; font-size: clamp(1.1rem, 2vw, 1.45rem); font-weight: 800; letter-spacing: -.025em; }
+.reviews-empty-copy { max-width: 55ch; margin: 0; color: var(--muted); font-size: .94rem; line-height: 1.65; }
+.reviews-empty-platforms { display: flex; flex-wrap: wrap; justify-content: end; gap: .55rem; }
+.reviews-empty-platforms span { display: inline-flex; align-items: center; gap: .4rem; padding: .55rem .7rem; border: 1px solid #ffffff24; border-radius: 999px; color: #ddd; font-size: .78rem; white-space: nowrap; }
+.reviews-empty-platforms svg { color: #ff6970; }
+.reels-section { padding-block: var(--section-space); scroll-snap-align: start; border-top: 1px solid #ffffff1c; background: #0d0b0b; }
+.reels-heading { display: flex; align-items: end; justify-content: space-between; flex-wrap: wrap; gap: 1.25rem; margin-bottom: 1.75rem; }
+.reels-heading h2 {
+  max-width: 24ch;
+  margin: .65rem 0 .85rem;
+  font-size: clamp(1.65rem, 3.1vw, 2.75rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -.045em;
+  text-wrap: balance;
+}
+.reels-intro { color: var(--muted); line-height: 1.65; }
+.reels-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: .6rem;
+  min-height: 44px;
+  padding: .6rem .85rem;
+  border: 1px solid #ffffff38;
+  border-radius: 6px;
+  font-size: .875rem;
+  font-weight: 700;
+}
+.reels-profile:hover { border-color: var(--accent); }
+.reels-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.reel-card { min-width: 0; overflow: hidden; border: 1px solid #ffffff26; border-radius: 8px; background: #151313; }
+.reel-video { position: relative; aspect-ratio: 9 / 16; background: radial-gradient(ellipse at 45% 40%, #49161d, #151013 68%); }
+.reel-video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.reel-caption { display: grid; gap: .4rem; padding: 1rem; overflow-wrap: anywhere; }
+.reel-caption h3 { font-weight: 700; }
+.reel-caption a { display: inline-flex; align-items: center; justify-self: start; gap: .3rem; color: #efbbbb; font-size: .85rem; }
+.reel-caption a:hover { text-decoration: underline; }
+.reels-empty { display: flex; align-items: center; gap: 1rem; padding: 1.5rem; border: 1px solid #ffffff24; border-radius: 8px; background: #181315; color: var(--muted); }
+.reels-empty svg { flex: none; color: #ff6970; }
+@media (max-width: 1100px) {
+  .reels-grid {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: min(100%, 340px);
+    overflow-x: auto;
+    padding-bottom: .75rem;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: thin;
+    scrollbar-color: #744349 #171717;
+  }
+  .reel-card { scroll-snap-align: start; }
+}
+@media (max-width: 900px) { .reviews-track { grid-auto-columns: calc((100% - 1rem) / 2); } }
+@media (max-width: 560px) {
+  .reviews-heading { align-items: start; flex-direction: column; }
+  .reviews-track { grid-auto-columns: 88%; }
+  .reviews-track:has(> :only-child) { grid-auto-columns: 100%; }
+  .reviews-empty { grid-template-columns: auto minmax(0, 1fr); gap: 1rem; }
+  .reviews-empty-mark { width: 46px; height: 46px; }
+  .reviews-empty-platforms { grid-column: 1 / -1; justify-content: start; }
+}
+

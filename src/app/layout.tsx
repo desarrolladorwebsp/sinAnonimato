@@ -21,6 +21,7 @@ const montserrat = localFont({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.sinanonimato.cl"),
   title: "Sin Anonimato",
   description:
     "Un espacio para escuchar, visibilizar y dar voz a las historias que importan.",

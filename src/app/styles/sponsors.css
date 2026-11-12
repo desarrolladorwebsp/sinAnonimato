@@ -1,0 +1,236 @@
+.sponsor-section { padding-block: clamp(2rem, 5vw, 4.25rem); }
+.sponsor-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .75rem;
+  min-height: 46px;
+  padding: .65rem 1.15rem;
+  border-radius: 5px;
+  color: white;
+  font-size: .86rem;
+  font-weight: 800;
+}
+.sponsor-action:disabled { opacity: .65; cursor: wait; }
+.sponsor-action:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
+.sponsor-dialog { width: min(36rem, calc(100vw - 2rem)); }
+.sponsor-dialog .info-dialog-content { padding-top: 3rem; }
+.sponsor-dialog h2 { font-size: clamp(1.5rem, 4vw, 2.2rem); }
+.sponsor-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; }
+.sponsor-field-wide { grid-column: 1 / -1; }
+.sponsor-form label { display: grid; gap: .4rem; font-size: .78rem; font-weight: 700; }
+.sponsor-form input, .sponsor-form textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: .6rem .7rem;
+  border: 1px solid #ffffff30;
+  border-radius: 5px;
+  background: #1b1b1b;
+  font-size: 1rem;
+  font-weight: 500;
+}
+.sponsor-form textarea { resize: vertical; }
+.sponsor-form input:focus-visible, .sponsor-form textarea:focus-visible { outline: 2px solid var(--accent); }
+.sponsor-form .sponsor-form-error { margin: 0; color: #ff9c9c; font-size: .8rem; }
+@media (max-width: 640px) {
+  .sponsor-form { grid-template-columns: minmax(0, 1fr); }
+}
+
+.sponsor-ad-label {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  margin-bottom: 1.15rem;
+  color: #f3eeee;
+}
+.sponsor-ad-label::before { content: ""; width: 3px; height: 1.1rem; background: #ff5358; }
+.sponsor-gallery { --ad-entry: clamp(2rem, 6vw, 5rem); }
+.sponsor-gallery[data-direction="back"] { --ad-entry: clamp(-5rem, -6vw, -2rem); }
+.sponsor-gallery-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(1.75rem, 8vw, 3.5rem);
+  gap: clamp(.55rem, 1.4vw, 1rem);
+  touch-action: pan-y pinch-zoom;
+}
+.sponsor-gallery-ad, .sponsor-gallery-preview {
+  isolation: isolate;
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  min-width: 0;
+  min-height: clamp(20rem, 44vw, 29rem);
+  border: 1px solid rgb(255 255 255 / .16);
+  border-radius: clamp(.8rem, 2vw, 1.4rem);
+  background: #111c20;
+  transition: border-color .25s ease;
+}
+.sponsor-gallery-ad { align-items: center; animation: sponsor-ad-enter .55s cubic-bezier(.2,.7,.2,1) both; }
+.sponsor-gallery-preview { align-items: end; animation: sponsor-ad-enter .65s cubic-bezier(.2,.7,.2,1) both; }
+.sponsor-gallery-ad::after, .sponsor-gallery-preview::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #050a0deb, #050a0d9c 49%, #050a0d13);
+  pointer-events: none;
+}
+.sponsor-gallery-preview::after { background: linear-gradient(0deg, #060708ed, #06070828 74%); }
+.sponsor-gallery-photo { object-fit: cover; object-position: 62% center; transition: transform .7s cubic-bezier(.2,.7,.2,1); }
+.sponsor-gallery-copy { z-index: 1; display: grid; justify-items: start; gap: 1rem; padding: clamp(1.1rem, 4.3vw, 3.75rem); }
+.sponsor-gallery-brand { display: grid; justify-items: start; gap: .85rem; }
+.sponsor-gallery-logo {
+  display: block;
+  position: relative;
+  width: 7.25rem;
+  height: 2.25rem;
+  border-radius: .45rem;
+  background: #fff;
+}
+.sponsor-gallery-logo img { padding: .3rem .45rem; }
+.sponsor-gallery-name {
+  max-width: 12ch;
+  color: #fff;
+  font-size: clamp(1.75rem, 4.5vw, 3.5rem);
+  font-weight: 850;
+  line-height: 1;
+  letter-spacing: -.045em;
+  text-wrap: balance;
+}
+.sponsor-gallery-description { max-width: 23ch; color: #f1eded; font-size: clamp(.95rem, 1.8vw, 1.3rem); line-height: 1.4; }
+.sponsor-gallery-description::before { content: ""; display: block; width: 2.5rem; height: 3px; margin-bottom: .75rem; background: #58d6ce; }
+.sponsor-gallery-link {
+  display: inline-flex;
+  gap: .65rem;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: .55rem 1rem;
+  border-radius: .55rem;
+  background: #ff5358;
+  color: #140708;
+  font-size: .875rem;
+  font-weight: 800;
+  transition: transform .25s ease, background-color .25s ease;
+}
+.sponsor-gallery-preview > span { z-index: 1; display: none; padding: 1.25rem; color: #fff; font-size: clamp(1.05rem, 2.25vw, 1.75rem); font-weight: 800; line-height: 1.08; }
+.sponsor-gallery-stage a:focus-visible { outline: 2px solid #fff; outline-offset: -5px; }
+@media (min-width: 768px) {
+  .sponsor-gallery-stage { grid-template-columns: minmax(0, 3.15fr) minmax(0, 1fr); }
+  .sponsor-gallery-preview > span { display: block; }
+}
+@media (hover: hover) {
+  .sponsor-gallery-stage a:hover { border-color: #ff5358; }
+  .sponsor-gallery-stage a:hover .sponsor-gallery-photo { transform: scale(1.1); }
+  .sponsor-gallery-ad:hover .sponsor-gallery-link { transform: translateX(.5rem); background: #ff7478; }
+}
+.sponsor-gallery-controls { display: flex; align-items: center; justify-content: space-between; gap: .35rem; margin-top: .9rem; }
+.sponsor-gallery-pages { display: flex; align-items: center; }
+.sponsor-gallery-controls button {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid rgb(255 255 255 / .26);
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+  transition: background-color .2s ease, border-color .2s ease;
+}
+.sponsor-gallery-controls button:hover { background: #301619; border-color: #ff5358; }
+.sponsor-gallery-controls button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.sponsor-gallery-controls .sponsor-gallery-dot { border-color: transparent; }
+.sponsor-gallery-dot span { width: .48rem; height: .48rem; border-radius: 1rem; background: #a4a0a0; transition: width .24s ease, background-color .24s ease; }
+.sponsor-gallery-dot[aria-current="true"] span { width: 1rem; background: #ff5358; }
+@keyframes sponsor-ad-enter {
+  from { opacity: .4; translate: var(--ad-entry) 0; }
+  to { opacity: 1; translate: 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sponsor-gallery *, .sponsor-gallery *::after { animation: none; transition: none; }
+  .sponsor-gallery-stage a:hover .sponsor-gallery-photo, .sponsor-gallery-ad:hover .sponsor-gallery-link { transform: none; }
+}
+
+.sponsor-gallery-preview small {
+  display: block;
+  margin-bottom: .5rem;
+  color: #e2dddd;
+  font-size: .65rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+@media (max-width: 767px) {
+  .sponsor-gallery-ad { align-items: end; }
+  .sponsor-gallery-ad::after {
+    background: linear-gradient(0deg, #050a0df5, #050a0d90 56%, #050a0d0d 92%);
+  }
+  .sponsor-gallery-copy { gap: .85rem; }
+}
+
+.sponsor-invitation {
+  position: relative;
+  display: grid;
+  align-items: end;
+  min-height: 26rem;
+  margin-top: clamp(1.5rem, 4vw, 3rem);
+  padding: 4.75rem clamp(1.25rem, 5vw, 3.5rem) clamp(1.25rem, 5vw, 3.5rem);
+  border: 1px solid var(--podcast-line);
+  border-radius: var(--podcast-radius);
+  background: linear-gradient(90deg, #080808f7 12%, #080808c2 48%, #08080840),
+    linear-gradient(0deg, #080808e8, transparent 85%),
+    #100a0b url("/images/auspiciadores/estudio.jpg") 65% center / cover;
+}
+.sponsor-studio-label {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  padding: .4rem .65rem;
+  border: 1px solid var(--podcast-line);
+  border-radius: 4px;
+  background: #090909c9;
+  font-size: .65rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.sponsor-studio-label::before {
+  content: "";
+  display: inline-block;
+  width: .35rem;
+  height: .35rem;
+  margin-inline-end: .55rem;
+  border-radius: 50%;
+  background: var(--podcast-accent);
+  vertical-align: .12em;
+}
+.sponsor-invitation h2 {
+  max-width: 16ch;
+  margin-block: .8rem 1rem;
+  font-size: clamp(2rem, 5vw, 4rem);
+  font-weight: 900;
+  line-height: 1.02;
+  letter-spacing: -.05em;
+}
+.sponsor-invitation-copy > p:not(.section-eyebrow) {
+  max-width: 46ch;
+  margin-bottom: 1.5rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.sponsor-brands { margin-top: 1.6rem; }
+.sponsor-brands h3 { margin-bottom: .75rem; font-weight: 800; }
+.sponsor-brands-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(100%, 27rem);
+  border-radius: 6px;
+  background: #f5f5f5;
+}
+.sponsor-brands-list li + li { border-inline-start: 1px solid #dedede; }
+.sponsor-brands-list a { position: relative; display: block; height: 4.25rem; }
+.sponsor-brands-list img { object-fit: contain; padding: .75rem; }
+.sponsor-brands-list a:hover { background: rgb(0 0 0 / .06); }
+@media (max-width: 767px) {
+  .sponsor-invitation {
+    background-image: linear-gradient(0deg, #080808fa 8%, #080808ab 100%),
+      url("/images/auspiciadores/estudio.jpg");
+  }
+}

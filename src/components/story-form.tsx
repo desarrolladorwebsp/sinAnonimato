@@ -69,7 +69,7 @@ export function StoryForm() {
       </h3>
 
       {status === "sent" ? (
-        <div className="py-12 text-sm leading-relaxed text-white/80" role="status">
+        <div className="form-success py-12 text-sm leading-relaxed text-white/80" role="status">
           <p>Gracias, {values.name}. Recibimos tu historia y te responderemos pronto.</p>
           <p className="mt-3">
             {confirmationSent
@@ -90,7 +90,7 @@ export function StoryForm() {
           </button>
         </div>
       ) : (
-        <form className="mt-6 flex flex-col gap-3.5" onSubmit={onSubmit} noValidate>
+        <form className="story-form mt-6 flex flex-col gap-3.5" onSubmit={onSubmit} noValidate>
           <Field
             id="nombre"
             label="Nombre completo"
