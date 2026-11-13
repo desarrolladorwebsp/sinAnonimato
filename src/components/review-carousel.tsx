@@ -79,6 +79,7 @@ export function ReviewCarousel({ reviews, examples = false }: { reviews: Review[
             </button>
           </div>}
         </div>
+        {examples && <p className="mb-3 text-sm text-muted">Estos cinco comentarios son ficticios.</p>}
         {reviews.length === 0 ? (
           <div className="reviews-empty" role="status">
             <div className="reviews-empty-mark" aria-hidden="true"><ChatCircleDots size={29} /></div>
@@ -113,12 +114,12 @@ export function ReviewCarousel({ reviews, examples = false }: { reviews: Review[
                   <Quotes size={27} weight="fill" className="review-quote-mark" aria-hidden="true" />
                   <blockquote>“{review.comment}”</blockquote>
                   <figcaption>
-                    <span className="review-platform-icon"><Icon size={19} aria-hidden="true" /></span>
+                    {!examples && <span className="review-platform-icon"><Icon size={19} aria-hidden="true" /></span>}
                     <span>
                       <strong>{review.author}</strong>
-                      {examples ? <span className="review-platform-label">Ejemplo ficticio</span> : review.sourceUrl
+                      {!examples && (review.sourceUrl
                         ? <a href={review.sourceUrl} target="_blank" rel="noopener noreferrer" aria-label={`Ver comentario original de ${review.author} en ${review.platform}`}>{review.platform} ↗</a>
-                        : <span className="review-platform-label">{review.platform}</span>}
+                        : <span className="review-platform-label">{review.platform}</span>)}
                     </span>
                   </figcaption>
                 </figure>
