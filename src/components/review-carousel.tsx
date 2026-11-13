@@ -7,25 +7,13 @@ import { StreamReveal } from "@/components/stream-reveal";
 
 const platformIcons = { Instagram: InstagramLogo, YouTube: YoutubeLogo, Comunidad: ChatCircleDots };
 
-// Sample copy for local previews. Real reviews take priority when available.
-const previewReviews: Review[] = process.env.NODE_ENV === "development"
-  ? [
-      "Oye, la historia que contaron me dejó pensando todo el día. Por favor, sigan haciendo estos capítulos.",
-      "Me gustó que dejaran a la invitada contar todo a su ritmo. Se sintió como escuchar una conversación de verdad.",
-      "Pensé que iba a escuchar diez minutos y terminé el capítulo entero. Gracias por abrir espacio para estas historias.",
-      "Hubo una parte que me pegó fuerte porque me recordó algo que vivió mi familia. Gracias por hablarlo con tanto respeto.",
-      "Lo escuché camino a la pega y después se lo mandé a mi hermana. Nos quedamos conversando del tema toda la tarde.",
-      "Qué buena la pregunta del final. Me hizo mirar la historia de otra forma. Ya quiero escuchar el próximo.",
-      "Me emocionó escuchar a alguien poner en palabras algo que cuesta tanto decir. Ojalá sigan invitando a más personas a contar lo suyo.",
-      "Me gusta que se den el tiempo de escuchar, incluso cuando hay silencios incómodos. Sigan así, hace falta un espacio como este.",
-    ].map((comment, index) => ({
-      id: `preview-review-${index + 1}`,
-      author: "Oyente",
-      platform: "Comunidad",
-      comment,
-      sourceUrl: null,
-    }))
-  : [];
+const sampleReviews: Review[] = [
+  { id: "example-1", author: "Camila R.", platform: "Comunidad", sourceUrl: null, comment: "El capítulo de artistas callejeros me hizo mirar de otra forma a quienes llenan de música la ciudad." },
+  { id: "example-2", author: "Diego M.", platform: "Comunidad", sourceUrl: null, comment: "Me gustó que dejaran espacio para escuchar la historia completa. La conversación se sintió cercana." },
+  { id: "example-3", author: "Valentina S.", platform: "Comunidad", sourceUrl: null, comment: "Pensé que iba a ver solo un rato y terminé el capítulo entero. Me quedé con ganas de escuchar el siguiente." },
+  { id: "example-4", author: "Javier P.", platform: "Comunidad", sourceUrl: null, comment: "Lo compartí con un amigo y terminamos conversando sobre cuánto trabajo hay detrás del arte que vemos en la calle." },
+  { id: "example-5", author: "Antonia L.", platform: "Comunidad", sourceUrl: null, comment: "Me gustó el respeto con que hicieron las preguntas. Ojalá sigan dando espacio a historias así." },
+];
 
 function advance(track: HTMLUListElement, direction: 1 | -1, reducedMotion: boolean) {
   const [first, second] = Array.from(track.children) as HTMLElement[];
@@ -39,7 +27,7 @@ function advance(track: HTMLUListElement, direction: 1 | -1, reducedMotion: bool
   track.scrollTo({ left: target, behavior: reducedMotion ? "instant" : "smooth" });
 }
 
-export function ReviewCarousel({ reviews }: { reviews: Review[] }) {
+export function ReviewCarousel({ reviews, examples = false }: { reviews: Review[]; examples?: boolean }) {
   const track = useRef<HTMLUListElement>(null);
   const lastInteraction = useRef(0);
   const [canScroll, setCanScroll] = useState(false);
@@ -128,7 +116,7 @@ export function ReviewCarousel({ reviews }: { reviews: Review[] }) {
                     <span className="review-platform-icon"><Icon size={19} aria-hidden="true" /></span>
                     <span>
                       <strong>{review.author}</strong>
-                      {review.sourceUrl
+                      {examples ? <span className="review-platform-label">Ejemplo ficticio</span> : review.sourceUrl
                         ? <a href={review.sourceUrl} target="_blank" rel="noopener noreferrer" aria-label={`Ver comentario original de ${review.author} en ${review.platform}`}>{review.platform} ↗</a>
                         : <span className="review-platform-label">{review.platform}</span>}
                     </span>
@@ -153,5 +141,5 @@ export function ReviewsSection() {
       .catch(() => { /* Reviews are optional on the public page. */ });
     return () => controller.abort();
   }, []);
-  return <ReviewCarousel reviews={reviews.length > 0 ? reviews : previewReviews} />;
+  return <ReviewCarousel reviews={reviews.length > 0 ? reviews : sampleReviews} examples={reviews.length === 0} />;
 }
