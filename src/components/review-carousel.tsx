@@ -79,7 +79,6 @@ export function ReviewCarousel({ reviews, examples = false }: { reviews: Review[
             </button>
           </div>}
         </div>
-        {examples && <p className="mb-3 text-sm text-muted">Estos cinco comentarios son ficticios.</p>}
         {reviews.length === 0 ? (
           <div className="reviews-empty" role="status">
             <div className="reviews-empty-mark" aria-hidden="true"><ChatCircleDots size={29} /></div>
