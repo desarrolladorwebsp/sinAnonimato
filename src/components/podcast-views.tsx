@@ -23,7 +23,7 @@ export function PodcastHome({ episodes }: { episodes: Episode[] }) {
         <StreamReveal className="podcast-feature-copy">
           <p className="section-eyebrow podcast-feature-label">{featured ? "Último capítulo" : "El podcast"}</p>
           <p className="podcast-brandline">Sin Anonimato / El podcast</p>
-          <h1>{featured?.title ?? "Historias reales. Voces que importan."}</h1>
+          {!featured && <h1>Historias reales. Voces que importan.</h1>}
           <p>{featured?.description.split(/\n/).find(line => line.trim()) || "Conversaciones completas para escuchar con tiempo."}</p>
           <div className="podcast-actions">
             {featured && <Link className="podcast-primary" href={`/capitulos/${featured.id}`}><Play weight="fill" size={18} aria-hidden="true" /> Ver último capítulo</Link>}

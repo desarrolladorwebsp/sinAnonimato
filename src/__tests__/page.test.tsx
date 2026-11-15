@@ -32,8 +32,10 @@ vi.mock("next/image", () => ({
 test("muestra el último capítulo, Shorts, formulario y pie", async () => {
   render(await Page());
 
+  expect(screen.queryByRole("heading", { name: "Capítulo 1: Artistas callejeros" })).not.toBeInTheDocument();
+
   expect(
-    screen.getByRole("heading", { level: 1, name: "Capítulo 1: Artistas callejeros" }),
+    screen.getByRole("link", { name: "Capítulo 1: Artistas callejeros" }),
   ).toBeInTheDocument();
   expect(
     screen.getByRole("heading", { level: 2, name: /envíanos tu caso/i }),
