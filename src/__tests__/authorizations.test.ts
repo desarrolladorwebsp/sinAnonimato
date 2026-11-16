@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import type { Database, Connection } from "@/lib/authorizations/db";
-import { Authorizations } from "@/lib/authorizations/service";
+import { Authorizations, personOf } from "@/lib/authorizations/service";
 import { digest, seal, unseal } from "@/lib/authorizations/crypto";
 import { processOutbox } from "@/lib/authorizations/mail";
 import { rut } from "@/lib/authorizations/validation";
@@ -44,8 +44,11 @@ async function invitation() {
 }
 async function accepted() {
   const guest = await invitation();
-  const view = await service.view(guest.session);
-  await service.accept(guest.session, { name: "Invitado de prueba", rut: "12.345.678-5", accepted: true, documentDigest: view.document.digest, email: "attacker@example.test" });
+  // A record pending under the previous release.
+  const row = await service.adminRow(guest.id);
+  const personal = seal(JSON.stringify({ ...personOf(row), rut: "12345678-5" }), `personal:${guest.id}`);
+  await db.query("UPDATE sa_authorizations SET state='pending', accepted_at=now(), personal=$2 WHERE id=$1", [guest.id, personal]);
+  await service.resend(guest.session);
   return { ...guest, verification: await jobToken("verification") };
 }
 describe("authorizations with an isolated PostgreSQL engine", () => {

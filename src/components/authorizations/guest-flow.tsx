@@ -91,7 +91,7 @@ export function GuestFlow({ confirm = false, demo = false }: { confirm?: boolean
             <label>Nombre completo<input name="name" value={name} onChange={event => setName(event.target.value)} required minLength={2} maxLength={120} autoComplete="name" placeholder="Tu nombre y apellidos" /></label>
             <label>RUT<input name="rut" value={rut} onChange={event => setRut(event.target.value)} required maxLength={16} placeholder="12.345.678-5" autoComplete="off" spellCheck={false} /></label>
             <label>Correo de la invitación<input value={view.email} type="email" readOnly aria-describedby="email-help" /></label>
-            <p id="email-help" className="authorization-help">Enviaremos la verificación a este correo. Si necesitas corregirlo, contacta a producción.</p>
+            <p id="email-help" className="authorization-help">Enviaremos el comprobante a este correo. Si necesitas corregirlo, contacta a producción.</p>
             <button className="authorization-button" type="submit" disabled={!hydrated}>Leer documento <ArrowRight size={20} aria-hidden="true" /></button>
           </form>
         </>}
@@ -101,11 +101,12 @@ export function GuestFlow({ confirm = false, demo = false }: { confirm?: boolean
           <div className="authorization-document-meta"><FileText size={18} aria-hidden="true" /><span>Versión {view.document.version}</span><button type="button" onClick={downloadDocument}>Descargar texto</button></div>
           <article className="authorization-document" tabIndex={0} aria-label="Documento completo de autorización"><div>{view.document.content}</div><h2>Tratamiento de datos personales</h2><div>{view.document.privacy}</div><h2>Conservación de tus datos</h2><div>{view.retentionPolicy}</div></article>
           <form method="post" className="authorization-form" onSubmit={event => { event.preventDefault(); void act(async () => {
-            if (!demo) await authorizationApi("guest/accept", { name, rut, accepted, documentDigest: view.document.digest });
-            setPhase("pending");
+            if (demo) { setPhase("complete"); return; }
+            await authorizationApi("guest/accept", { name, rut, accepted, documentDigest: view.document.digest });
+            await refresh();
           }); }}>
             <label className="authorization-checkbox"><input type="checkbox" checked={accepted} onChange={event => setAccepted(event.target.checked)} required /><span>{view.document.acceptance}</span></label>
-            <button className="authorization-button" type="submit" disabled={!accepted || busy}>{busy ? "Registrando aceptación…" : "Aceptar y enviar verificación"}<ArrowRight size={20} aria-hidden="true" /></button>
+            <button className="authorization-button" type="submit" disabled={!accepted || busy}>{busy ? "Registrando aceptación…" : "Aceptar y confirmar autorización"}<ArrowRight size={20} aria-hidden="true" /></button>
             <button className="authorization-text-button" type="button" disabled={busy} onClick={() => setPhase("identity")}><ArrowLeft size={16} aria-hidden="true" /> Volver a mis datos</button>
           </form>
         </>}
@@ -132,7 +133,7 @@ export function GuestFlow({ confirm = false, demo = false }: { confirm?: boolean
         {phase === "complete" && <div className="authorization-centered">
           <CheckCircle className="authorization-success-icon" size={64} weight="light" aria-hidden="true" />
           {heading("Todo listo para tu participación.")}
-          <p className="authorization-lead">{view?.confirmationMethod === "production" ? "Producción validó tu aceptación y tu autorización quedó registrada." : "Tu correo está verificado y tu autorización quedó registrada."}</p>
+          <p className="authorization-lead">{view?.confirmationMethod === "production" ? "Producción validó tu aceptación y tu autorización quedó registrada." : "Tu autorización quedó confirmada y registrada."}</p>
           <div className="authorization-receipt"><FileText size={32} aria-hidden="true" /><div><strong>Comprobante de autorización</strong><span>{demo ? "Documento de demostración" : `Folio ${view?.id}`}</span></div></div>
           {demo ? <p className="authorization-help">En el proceso real podrás descargar aquí tu PDF con el documento aceptado y las fechas de aceptación y confirmación.</p> : <a className="authorization-button" href="/api/authorizations/guest/receipt" download><DownloadSimple size={20} aria-hidden="true" /> Descargar comprobante PDF</a>}
           <p className="authorization-help">Enviaremos una copia a tu correo y un aviso al equipo de producción. Conserva el comprobante para tus registros.</p>
@@ -143,6 +144,6 @@ export function GuestFlow({ confirm = false, demo = false }: { confirm?: boolean
       {error && <p className="authorization-alert" role="alert">{error}</p>}
       {message && <p className="authorization-notice" role="status">{message}</p>}
     </section>
-    <p className="authorization-bottom-note">Tu autorización se completa al verificar tu correo. Puedes consultar al equipo antes de aceptar.</p>
+    <p className="authorization-bottom-note">Puedes consultar al equipo antes de aceptar las condiciones.</p>
   </AuthorizationShell>;
 }

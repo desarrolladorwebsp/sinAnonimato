@@ -3,7 +3,7 @@ import { beforeAll, beforeEach, afterAll, expect, it, vi } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { readFile } from "node:fs/promises";
 import type { Connection, Database } from "@/lib/authorizations/db";
-import { unseal } from "@/lib/authorizations/crypto";
+import { seal, unseal } from "@/lib/authorizations/crypto";
 const state = vi.hoisted(() => ({ db: null as unknown as Database, jar: new Map<string,string>(), after: vi.fn() }));
 vi.mock("@/lib/authorizations/db", () => ({ database: () => state.db }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: (key:string) => state.jar.has(key) ? { value: state.jar.get(key) } : undefined, set: (key:string,value:string) => { if(value) state.jar.set(key,value); else state.jar.delete(key); } }) }));
@@ -30,7 +30,7 @@ async function mailToken(kind:string) {
  const r=await pg.query<{id:string;payload:string}>("SELECT id,payload FROM sa_outbox WHERE kind=$1 ORDER BY created_at DESC LIMIT 1",[kind]);
  return new URL(JSON.parse(unseal(r.rows[0].payload,`mail:${r.rows[0].id}`)).url).hash.slice(1);
 }
-async function prepare() {
+async function prepare(legacy = false) {
   const legal={title:"Documento de prueba",version:"route-1",content:"Documento exclusivamente ficticio para pruebas de autorización y confirmación.",privacy:"Los datos ficticios de esta prueba no se utilizan ni conservan en producción.",acceptance:"He leído y acepto expresamente el documento ficticio de prueba."};
   const document=await (await call("admin/document",legal,true)).json();
   expect((await call("admin/approve",{id:document.id,approved:true},true)).status).toBe(200);
@@ -38,11 +38,32 @@ async function prepare() {
   expect(response.status).toBe(201);const {id}=await response.json();
   expect((await call("guest/exchange",{token:await mailToken("invitation")})).status).toBe(200);
   const view=await (await call("guest/me")).json();
-  expect((await call("guest/accept",{name:"Invitado ficticio",rut:"12345678-5",accepted:true,documentDigest:view.document.digest})).status).toBe(200);
+  if (legacy) {
+    const { rows: [row] } = await pg.query<{personal:string}>("SELECT personal FROM sa_authorizations WHERE id=$1", [id]);
+    const person = JSON.parse(unseal(row.personal, `personal:${id}`));
+    const personal = seal(JSON.stringify({ ...person, rut: "12345678-5" }), `personal:${id}`);
+    await pg.query("UPDATE sa_authorizations SET state='pending', accepted_at=now(), personal=$2 WHERE id=$1", [id, personal]);
+    expect((await call("guest/resend", {})).status).toBe(200);
+  } else {
+    expect((await call("guest/accept",{name:"Invitado ficticio",rut:"12345678-5",accepted:true,documentDigest:view.document.digest})).status).toBe(200);
+  }
   return id as string;
 }
+it("confirms on acceptance with a PDF and no verification email", async () => {
+  const id = await prepare();
+  expect(await (await call("guest/me")).json()).toMatchObject({ state: "confirmed", confirmationMethod: null });
+  const receipt = await call("guest/receipt");
+  expect(receipt.status).toBe(200);
+  expect(Buffer.from(await receipt.arrayBuffer()).subarray(0, 5).toString()).toBe("%PDF-");
+  const jobs = await pg.query<{kind:string}>("SELECT kind FROM sa_outbox WHERE authorization_id=$1 ORDER BY kind", [id]);
+  expect(jobs.rows.map(job => job.kind)).toEqual(["guest_receipt", "invitation", "production"]);
+  const audit = await pg.query("SELECT actor FROM sa_events WHERE authorization_id=$1 AND kind='invitation_confirmed'", [id]);
+  expect(audit.rows).toEqual([{ actor: "guest" }]);
+  await pg.exec(await readFile("migrations/003_production_confirmation.sql", "utf8"));
+  expect((await (await call("guest/me")).json()).confirmationMethod).toBeNull();
+});
 it.each(["email","production"])("completes invitation → acceptance → %s confirmation → PDF through real route handlers",async method=>{
-  const id=await prepare();
+  const id=await prepare(true);
   expect((await (await call("guest/me")).json()).state).toBe("pending");
   expect((await call("guest/receipt")).status).toBe(409);
   const verification=await mailToken("verification");
@@ -60,7 +81,7 @@ it.each(["email","production"])("completes invitation → acceptance → %s conf
   expect(state.after).toHaveBeenCalled();
 });
 it("rejects through the admin route and blocks unauthorized decisions and guest evidence",async()=>{
-  const id=await prepare();
+  const id=await prepare(true);
   expect((await call("admin/confirm",{id,approved:true})).status).toBe(401);
   expect((await call("admin/reject",{id,rejected:true})).status).toBe(401);
   expect((await call("admin/reject",{id,rejected:true},true)).status).toBe(200);

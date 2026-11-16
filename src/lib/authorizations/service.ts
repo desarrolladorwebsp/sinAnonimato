@@ -112,7 +112,7 @@ export class Authorizations {
     return this.db.transaction(async db => {
       const row = await this.guestRow(session, db, true);
       if (date(row.invite_expires) <= new Date()) fail();
-      if (row.state !== "invited") throw new AuthorizationError(409, "La aceptación ya está registrada. Revisa tu correo para confirmarla.");
+      if (row.state !== "invited") throw new AuthorizationError(409, "La aceptación ya está registrada. Consulta el estado de tu autorización.");
       const document = await documentOf(db, row.document_id);
       if (!document.approved_at || document.retired_at) throw new AuthorizationError(409, "El documento fue retirado. Solicita una nueva invitación a producción.");
       if (input.accepted !== true || input.documentDigest !== document.digest) throw new AuthorizationError(400, "Debes leer y aceptar expresamente la versión del documento presentada.");
@@ -120,10 +120,12 @@ export class Authorizations {
       person.name = validate.text(input.name, "el nombre completo", 120, 2);
       await assertPdfText(person.name);
       person.rut = validate.rut(input.rut);
-      // The verification destination is fixed by production, never by untrusted guest input.
-      await db.query("UPDATE sa_authorizations SET personal=$2,state='pending',accepted_at=now() WHERE id=$1", [row.id, encryptedPerson(row.id, person)]);
+      // Keep the address from the invitation and confirm in the same transaction.
+      row.personal = encryptedPerson(row.id, person);
+      row.accepted_at = new Date();
+      await db.query("UPDATE sa_authorizations SET personal=$2,accepted_at=$3 WHERE id=$1", [row.id, row.personal, row.accepted_at]);
       await event(db, row.id, "accepted", "guest", { documentDigest: document.digest, version: document.version, explicitAcceptance: true });
-      await this.verification(db, row, person);
+      await this.finalize(db, row, null, "guest");
     });
   }
   async resend(session: unknown) {
@@ -143,7 +145,7 @@ export class Authorizations {
     if (document.retired_at) fail();
     return { episode: row.episode, documentTitle: document.title, documentVersion: document.version, expiresAt: date(row.verify_expires).toISOString() };
   }
-  private async finalize(db: Connection, row: Authorization, method: "email" | "production", actor: string) {
+  private async finalize(db: Connection, row: Authorization, method: "email" | "production" | null, actor: string) {
     const document = await documentOf(db, row.document_id);
     if (!document.approved_at || document.retired_at) throw new AuthorizationError(409, "El documento fue retirado. Contacta a producción.");
     const person = personOf(row);
@@ -152,7 +154,7 @@ export class Authorizations {
     const receipt = await makeReceipt(row, person, document);
     await db.query("UPDATE sa_authorizations SET state='confirmed',confirmed_at=$2,confirmation_method=$3,confirmed_by=$4,verify_hash=NULL,verify_expires=NULL,invite_hash=NULL,receipt=$5,receipt_digest=$6 WHERE id=$1", [row.id,row.confirmed_at,method,row.confirmed_by,seal(receipt.toString("base64"), `receipt:${row.id}`),digest(receipt)]);
     await db.query("UPDATE sa_outbox SET status='cancelled',payload='' WHERE authorization_id=$1 AND kind='verification' AND status IN ('queued','failed')", [row.id]);
-    await event(db, row.id, method === "email" ? "email_confirmed" : "production_confirmed", actor, { method, documentDigest: document.digest, acceptedAt: row.accepted_at, receiptDigest: digest(receipt) });
+    await event(db, row.id, method === "email" ? "email_confirmed" : method === "production" ? "production_confirmed" : "invitation_confirmed", actor, { method, documentDigest: document.digest, acceptedAt: row.accepted_at, receiptDigest: digest(receipt) });
     await enqueue(db, row, "guest_receipt", { to: person.email, name: person.name, episode: row.episode, confirmationMethod: method });
     await enqueue(db, row, "production", { to: validate.email(process.env.PRODUCTION_EMAIL), name: person.name, episode: row.episode, confirmationMethod: method, url: `${settings().origin}/admin/autorizaciones` });
   }
