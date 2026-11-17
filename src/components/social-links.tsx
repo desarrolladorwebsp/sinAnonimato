@@ -3,6 +3,7 @@
 import {
   FacebookLogo,
   InstagramLogo,
+  TiktokLogo,
   YoutubeLogo,
   type Icon,
 } from "@phosphor-icons/react";
@@ -12,6 +13,7 @@ const icons: Record<(typeof socials)[number]["platform"], Icon> = {
   Instagram: InstagramLogo,
   Facebook: FacebookLogo,
   YouTube: YoutubeLogo,
+  TikTok: TiktokLogo,
 };
 
 type SocialLinksProps = {
@@ -22,6 +24,7 @@ export function SocialLinks({ variant }: SocialLinksProps) {
   return (
     <ul className="flex flex-wrap items-center gap-4">
       {socials.map((social) => {
+        if (variant === "header" && social.platform === "TikTok") return null;
         const Icon = icons[social.platform];
         const label = variant === "cues" ? social.cue : social.platform;
         const external = social.href.startsWith("http");

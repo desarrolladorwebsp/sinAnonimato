@@ -24,4 +24,9 @@ export const socials = [
     platform: "YouTube",
     cue: "Míranos",
   },
+  {
+    href: "https://www.tiktok.com/@sinanonimato.cl",
+    platform: "TikTok",
+    cue: "Síguenos",
+  },
 ] as const;
