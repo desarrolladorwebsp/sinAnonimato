@@ -23,7 +23,7 @@ type SocialLinksProps = {
 export function SocialLinks({ variant }: SocialLinksProps) {
   return (
     <ul className={variant === "names"
-      ? "grid w-full max-w-56 grid-cols-2 items-start gap-x-3 gap-y-4"
+      ? "footer-social-grid grid w-full max-w-56 grid-cols-2 items-start gap-x-3 gap-y-4 lg:max-w-none lg:grid-cols-4"
       : "flex flex-wrap items-center gap-4"}>
       {socials.map((social) => {
         const Icon = icons[social.platform];

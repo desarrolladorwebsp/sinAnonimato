@@ -14,7 +14,7 @@ export function SiteFooter({ innerPage = false }: { innerPage?: boolean }) {
   return (
     <footer id="comunidad" className="site-footer bg-black px-5 md:px-8">
       <div
-        className="footer-main mx-auto grid w-full max-w-6xl gap-12 md:grid-cols-[1fr_1.4fr_0.8fr] md:items-center"
+        className="footer-main mx-auto grid w-full max-w-6xl gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(22rem,1.1fr)] lg:items-center"
       >
         <div>
           <Logo variant="footer" href={innerPage ? "/#inicio" : undefined} />
