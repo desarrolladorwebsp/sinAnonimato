@@ -24,7 +24,6 @@ export function SocialLinks({ variant }: SocialLinksProps) {
   return (
     <ul className="flex flex-wrap items-center gap-4">
       {socials.map((social) => {
-        if (variant === "header" && social.platform === "TikTok") return null;
         const Icon = icons[social.platform];
         const label = variant === "cues" ? social.cue : social.platform;
         const external = social.href.startsWith("http");
