@@ -22,7 +22,9 @@ type SocialLinksProps = {
 
 export function SocialLinks({ variant }: SocialLinksProps) {
   return (
-    <ul className="flex flex-wrap items-center gap-4">
+    <ul className={variant === "names"
+      ? "grid w-full max-w-56 grid-cols-2 items-start gap-x-3 gap-y-4"
+      : "flex flex-wrap items-center gap-4"}>
       {socials.map((social) => {
         const Icon = icons[social.platform];
         const label = variant === "cues" ? social.cue : social.platform;
