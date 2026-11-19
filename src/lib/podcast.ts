@@ -13,6 +13,16 @@ const firstEpisode: Episode = {
   thumbnailSize: "maxresdefault",
 };
 
+const secondEpisode: Episode = {
+  id: "CGP-Vo5KAKw",
+  title: "Capítulo 2",
+  description: "El segundo capítulo de Sin Anonimato.",
+  duration: "",
+  publishedAt: "",
+  embeddable: true,
+};
+const publishedEpisodes = [secondEpisode, firstEpisode];
+
 type Uploads = { items: { contentDetails: { relatedPlaylists: { uploads: string } } }[] };
 type Playlist = { nextPageToken?: string; items: { contentDetails: { videoId: string } }[] };
 type Videos = {
@@ -44,7 +54,7 @@ async function youtube<T>(resource: string, query: Record<string, string>, key: 
 }
 
 export const getEpisodes = cache(async (): Promise<Episode[]> => {
-  const fallback = [firstEpisode];
+  const fallback = publishedEpisodes;
   const key = process.env.YOUTUBE_API_KEY?.trim();
   if (!key) return fallback;
 
@@ -88,7 +98,16 @@ export const getEpisodes = cache(async (): Promise<Episode[]> => {
       pageToken = page.nextPageToken ?? "";
     } while (pageToken);
 
-    return [...episodes.values()].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+    // Explicitly added chapters remain available when YouTube metadata is delayed.
+    const configured = publishedEpisodes.map(episode => ({
+      ...episode,
+      ...episodes.get(episode.id),
+      title: episode.title,
+    }));
+    const configuredIds = new Set(publishedEpisodes.map(episode => episode.id));
+    return [...configured, ...[...episodes.values()]
+      .filter(episode => !configuredIds.has(episode.id))
+      .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))];
   } catch {
     console.warn("No se pudo consultar el catálogo de YouTube.");
     return fallback;
