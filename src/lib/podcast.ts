@@ -14,12 +14,13 @@ const firstEpisode: Episode = {
 };
 
 const secondEpisode: Episode = {
-  id: "CGP-Vo5KAKw",
+  id: "-q6uhzBdQJc",
   title: "Capítulo 2",
   description: "El segundo capítulo de Sin Anonimato.",
   duration: "",
   publishedAt: "",
   embeddable: true,
+  thumbnailSize: "maxresdefault",
 };
 const publishedEpisodes = [secondEpisode, firstEpisode];
 
