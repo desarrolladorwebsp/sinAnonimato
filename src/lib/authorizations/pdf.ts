@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { Authorization, LegalDocument, Personal } from "./types";
 import { localDate } from "./types";
+import { formatRecording } from "./calendar-dates";
 import { AuthorizationError } from "./config";
 
 const fontPath = () => path.join(process.cwd(), "src/assets/fonts/montserrat-latin-500-normal.woff");
@@ -63,7 +64,7 @@ export async function makeReceipt(record: Authorization, person: Personal, docum
   line(`RUT: ${person.rut}`);
   line(`${record.confirmation_method === "email" ? "Correo confirmado" : "Correo del participante"}: ${person.email}`);
   line(`Episodio: ${record.episode}`);
-  line(`Grabación: ${localDate(record.recording_at)} (America/Santiago)`);
+  line(`Grabación: ${formatRecording(record.recording_at)} (America/Santiago)`);
   line(`Aceptación expresa: ${localDate(record.accepted_at!)} (America/Santiago)`);
   line(`${record.confirmation_method === "production" ? "Validación de producción" : record.confirmation_method === "email" ? "Confirmación por correo" : "Confirmación desde la invitación"}: ${localDate(record.confirmed_at!)} (America/Santiago)`);
   line(`Tiempos UTC: ${new Date(record.accepted_at!).toISOString()} / ${new Date(record.confirmed_at!).toISOString()}`);

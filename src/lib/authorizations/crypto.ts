@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from "node:crypto";
 import { AuthorizationError } from "./config";
 
 function key() {
@@ -7,6 +7,7 @@ function key() {
   return Buffer.from(value, "hex");
 }
 export const digest = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
+export const invitationIdentity = (value: string) => createHmac("sha256", key()).update("invitation-identity:").update(value).digest("hex");
 export const token = () => randomBytes(32).toString("base64url");
 export const validToken = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value);
 

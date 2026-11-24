@@ -1,5 +1,6 @@
 /** Add only approved Shorts. The empty state links to the official channel. */
-export const youtubeShorts: { id: string; title: string }[] = [
+export type YoutubeShort = { id: string; title: string; embeddable?: boolean };
+export const youtubeShorts: YoutubeShort[] = [
   { id: "nkqIhbNKGX8", title: "Short de Sin Anonimato 1" },
   { id: "QDn41D6XRrA", title: "Short de Sin Anonimato 2" },
   { id: "MUCz8n6lCkw", title: "Short de Sin Anonimato 3" },

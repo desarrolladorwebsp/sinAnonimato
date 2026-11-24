@@ -11,7 +11,7 @@ async function main() {
   try {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock(17415003)");
-    for (const filename of ["001_authorizations.sql", "002_indefinite_retention.sql", "003_production_confirmation.sql", "004_reviews.sql"]) {
+    for (const filename of ["001_authorizations.sql", "002_indefinite_retention.sql", "003_production_confirmation.sql", "004_reviews.sql", "005_episode_schedule.sql", "006_episode_formats.sql", "007_calendar_management.sql"]) {
       await client.query(await readFile(new URL(`../../migrations/${filename}`, import.meta.url), "utf8"));
     }
     await client.query("COMMIT");
@@ -19,6 +19,6 @@ async function main() {
   finally { client.release(); }
   const migrations = await getMigrations(getAuth().options);
   await migrations.runMigrations();
-  console.log("Authorization, authentication and review schemas ready.");
+  console.log("Authorization, authentication, review and episode schedule schemas ready.");
 }
 main().catch(() => { console.error("Migration failed. Check configuration and database access; no credentials were logged."); process.exitCode = 1; }).finally(async () => { if (process.env.DATABASE_URL) await pool().end(); });

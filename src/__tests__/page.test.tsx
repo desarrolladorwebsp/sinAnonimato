@@ -3,7 +3,10 @@ import { afterEach, expect, test, vi } from "vitest";
 import Page from "../app/page";
 import { StoryForm } from "@/components/story-form";
 vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
-vi.mock("@/lib/podcast", () => ({ getEpisodes: async () => [{ id: "xNfdDPhmEMU", title: "Capítulo 1: Artistas callejeros", description: "El primer capítulo.", duration: "", publishedAt: "", embeddable: true }] }));
+vi.mock("@/lib/podcast", () => ({ getPodcastMedia: async () => ({
+  episodes: [{ id: "xNfdDPhmEMU", title: "Capítulo 1: Artistas callejeros", description: "El primer capítulo.", duration: "", publishedAt: "", embeddable: true }],
+  shorts: [{ id: "demo-video2", title: "Short programado" }],
+}) }));
 vi.mock("@/components/review-carousel", () => ({ ReviewsSection: () => null }));
 
 afterEach(() => {
@@ -48,6 +51,8 @@ test("muestra el último capítulo, Shorts, formulario y pie", async () => {
   ).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Ver último capítulo" })).toHaveAttribute("href", "/capitulos/xNfdDPhmEMU");
   expect(screen.getByRole("heading", { name: "Historias en pocos minutos." })).toBeInTheDocument();
+  expect(screen.getByTitle("Short programado")).toHaveAttribute("src", expect.stringContaining("/embed/demo-video2"));
+  expect(screen.queryByRole("link", { name: "Short programado" })).not.toBeInTheDocument();
   expect(screen.getByText(/todos los derechos reservados/i)).toBeInTheDocument();
 });
 

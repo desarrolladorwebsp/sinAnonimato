@@ -7,6 +7,8 @@ import { body, guestSession, json, privateHeaders, rateLimit, sameOrigin, setGue
 import { processOutbox } from "@/lib/authorizations/mail";
 import { addReview, deleteReview, listReviews } from "@/lib/reviews";
 import { Authorizations } from "@/lib/authorizations/service";
+import { listScheduledEpisodes, scheduleEpisode, updateScheduledEpisode } from "@/lib/episode-schedule";
+import { verifyScheduledAvailability } from "@/lib/youtube-availability";
 
 export const runtime = "nodejs";
 const notify = () => after(async () => { try { await processOutbox(database()); } catch { console.error("Authorization outbox unavailable"); } });
@@ -44,6 +46,12 @@ async function handler(request: Request, context: Context) {
     if (path[0] === "admin") {
       const admin = await requireAdmin(request.headers);
       await rateLimit(db, `admin:${admin.email}`, 90);
+      if (method === "POST" && path[1] === "episode-schedule" && path.length <= 3) {
+        if (admin.role !== "admin") throw new AuthorizationError(403, "Solo administración puede programar publicaciones.");
+        const input = await body(request, 4096);
+        if (path[2]) return json(await updateScheduledEpisode(db, path[2], input, admin.email));
+        return json(await scheduleEpisode(db, input, admin.email), 201);
+      }
       if (path.length === 2 && path[1] === "reviews") {
         if (admin.role !== "admin") throw new AuthorizationError(403, "Solo administración puede gestionar reseñas.");
         if (method === "GET") return json(await listReviews(db));
@@ -58,12 +66,13 @@ async function handler(request: Request, context: Context) {
         }
       }
       if (method === "GET" && path[1] === "overview") {
-        const [documents, authorizations, jobs] = await Promise.all([
+        const [documents, authorizations, jobs, scheduledEpisodes] = await Promise.all([
           db.query("SELECT * FROM sa_documents ORDER BY created_at DESC"),
           service.list(new URL(request.url).searchParams.get("q") || ""),
           db.query("SELECT authorization_id,kind,status,delivery,attempts FROM sa_outbox ORDER BY created_at DESC LIMIT 1000"),
+          listScheduledEpisodes(db).then(entries => verifyScheduledAvailability(entries)).catch(() => null),
         ]);
-        return json({ admin, documents: documents.rows, authorizations, jobs: jobs.rows, readiness: readiness() });
+        return json({ admin, documents: documents.rows, authorizations, jobs: jobs.rows, scheduledEpisodes, readiness: readiness() });
       }
       if (method === "GET" && path[1] === "detail" && path[2]) {
         const row = await service.adminRow(path[2]);
@@ -76,9 +85,18 @@ async function handler(request: Request, context: Context) {
       }
       if (method === "POST") {
         const input = await body(request);
-        if (path[1] === "invite") { const result = await service.invite(input, admin.email); notify(); return json(result, 201); }
+        if (path[1] === "invite" && path.length === 2) {
+          const result = await service.invite(input, admin.email);
+          if (!result.alreadyExists) notify();
+          return json(result, result.alreadyExists ? 200 : 201);
+        }
         if (path[1] === "manage" && input.action === "resend") { await service.manage(String(input.id), input.action, admin.email); notify(); return json({ ok: true }); }
         await requireAdmin(request.headers, true);
+        if (path[1] === "invite" && path[2] && path.length === 3) {
+          const result = await service.editInvitation(path[2], input, admin.email);
+          if (result.updated) notify();
+          return json(result);
+        }
         if (path[1] === "confirm") { const result = await service.confirmByProduction(String(input.id), admin.email, input.approved); notify(); return json(result); }
         if (path[1] === "reject") return json(await service.rejectByProduction(String(input.id), admin.email, input.rejected));
         if (path[1] === "document") return json(await service.createDocument(input, admin.email), 201);

@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "node scripts/authorizations/migrate-calendar.mjs && npm run build",
   "regions": ["gru1"],
   "crons": [
     { "path": "/api/internal/authorizations", "schedule": "*/15 * * * *" }

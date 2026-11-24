@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { Connection, Database } from "./db";
 import { AuthorizationError, settings } from "./config";
-import { digest, seal, token, unseal, validToken } from "./crypto";
+import { digest, invitationIdentity, seal, token, unseal, validToken } from "./crypto";
 import * as validate from "./validation";
 import type { Authorization, GuestView, LegalDocument, Personal } from "./types";
 import { assertPdfText, makeReceipt } from "./pdf";
+import { calendarDay, endOfRecordingDay } from "./calendar-dates";
 
 function fail(message = "El enlace venció, fue reemplazado o ya no está disponible."): never { throw new AuthorizationError(410, message); }
 export const personOf = (row: Pick<Authorization, "personal" | "id">): Personal => JSON.parse(unseal(row.personal, `personal:${row.id}`));
@@ -26,6 +27,46 @@ async function documentOf(db: Connection, id: string) {
 async function active(row: Authorization | undefined): Promise<Authorization> {
   if (!row || ["cancelled", "rejected"].includes(row.state) || (row.retain_until && date(row.retain_until) <= new Date())) fail();
   return row;
+}
+
+async function invitationFields(input: Record<string, unknown>, retentionPolicy: string, prior?: Date) {
+  const personal: Personal = { name: validate.text(input.name, "el nombre", 120, 2), email: validate.email(input.email), retentionPolicy };
+  const episode = validate.text(input.episode, "el episodio", 200);
+  await assertPdfText(personal.name, personal.email, personal.retentionPolicy, episode);
+  const recording = input.recordingDate === undefined
+    ? new Date(validate.text(input.recordingAt, "la fecha de grabación", 50))
+    : prior && input.recordingDate === calendarDay(prior)
+      ? prior
+      : endOfRecordingDay(validate.text(input.recordingDate, "la fecha de grabación", 10));
+  const now = Date.now();
+  if (!recording || !Number.isFinite(recording.getTime()) || recording.getTime() <= now) {
+    throw new AuthorizationError(400, "Selecciona una fecha de grabación vigente o futura.");
+  }
+  const documentId = validate.uuid(input.documentId);
+  const invitationKey = invitationIdentity(JSON.stringify([personal.email, episode.toLowerCase(), recording.toISOString(), documentId]));
+  const expires = new Date(Math.min(now + 7 * 86400000, recording.getTime()));
+  return { personal, episode, recording, documentId, invitationKey, expires };
+}
+
+async function approvedDocumentOf(db: Connection, id: string) {
+  const document = await documentOf(db, id);
+  if (!document.approved_at || document.retired_at) throw new AuthorizationError(409, "Selecciona un documento aprobado y vigente.");
+  return document;
+}
+
+async function matchingLegacyInvitation(db: Connection, fields: Awaited<ReturnType<typeof invitationFields>>, excludeId?: string) {
+  const { rows } = await db.query<Pick<Authorization, "id" | "personal">>(`
+    SELECT id, personal FROM sa_authorizations
+    WHERE invitation_key IS NULL AND state IN ('invited','pending','confirmed')
+      AND recording_at=$1 AND document_id=$2 AND lower(episode)=lower($3)
+      AND ($4::uuid IS NULL OR id<>$4)
+  `, [fields.recording, fields.documentId, fields.episode, excludeId ?? null]);
+  return rows.find(row => personOf(row).email === fields.personal.email);
+}
+
+async function enqueueInvitation(db: Connection, row: Authorization, fields: Awaited<ReturnType<typeof invitationFields>>, origin: string, invitation: string) {
+  const { personal, episode, expires } = fields;
+  await enqueue(db, row, "invitation", { to: personal.email, name: personal.name, episode, url: `${origin}/autorizacion#${invitation}` }, expires);
 }
 
 export class Authorizations {
@@ -54,22 +95,63 @@ export class Authorizations {
     const config = settings();
     if (!process.env.PRODUCTION_EMAIL) throw new AuthorizationError(503, "Falta configurar el correo de producción.");
     validate.email(process.env.PRODUCTION_EMAIL);
-    const personal: Personal = { name: validate.text(input.name, "el nombre", 120, 2), email: validate.email(input.email), retentionPolicy: config.retentionPolicy };
-    const episode = validate.text(input.episode, "el episodio", 200);
-    await assertPdfText(personal.name, personal.email, personal.retentionPolicy, episode);
-    const recording = new Date(validate.text(input.recordingAt, "la fecha de grabación", 50));
-    if (Number.isNaN(recording.getTime()) || recording <= new Date()) throw new AuthorizationError(400, "Selecciona una fecha de grabación futura.");
+    const fields = await invitationFields(input, config.retentionPolicy);
+    const { personal, episode, recording, documentId, invitationKey, expires } = fields;
     return this.db.transaction(async db => {
-      const document = await documentOf(db, validate.uuid(input.documentId));
-      if (!document.approved_at || document.retired_at) throw new AuthorizationError(409, "Selecciona un documento aprobado y vigente.");
+      const document = await approvedDocumentOf(db, documentId);
+      // Existing records were encrypted before this identity was introduced.
+      const legacy = await matchingLegacyInvitation(db, fields);
+      if (legacy) return { id: legacy.id, alreadyExists: true };
       const id = randomUUID();
       const invitation = token();
-      const expires = new Date(Math.min(Date.now() + 7 * 86400000, recording.getTime()));
       const retainUntil = config.retention === null ? null : new Date(recording.getTime() + config.retention * 86400000);
-      const { rows } = await db.query<Authorization>("INSERT INTO sa_authorizations(id,document_id,episode,recording_at,personal,invite_hash,invite_expires,created_by,retain_until) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *", [id, document.id, episode, recording, encryptedPerson(id, personal), digest(invitation), expires, actor, retainUntil]);
-      await enqueue(db, rows[0], "invitation", { to: personal.email, name: personal.name, episode, url: `${config.origin}/autorizacion#${invitation}` }, expires);
-      await event(db, id, "invited", actor, { documentId: document.id, documentDigest: document.digest });
-      return { id };
+      const { rows } = await db.query<Authorization>(`
+        INSERT INTO sa_authorizations(id,document_id,episode,recording_at,personal,invite_hash,invite_expires,created_by,retain_until,invitation_key)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        ON CONFLICT (invitation_key) WHERE state IN ('invited','pending','confirmed') DO NOTHING RETURNING *
+      `, [id, documentId, episode, recording, encryptedPerson(id, personal), digest(invitation), expires, actor, retainUntil, invitationKey]);
+      if (!rows[0]) {
+        const existing = await db.query<{id: string}>("SELECT id FROM sa_authorizations WHERE invitation_key=$1 AND state IN ('invited','pending','confirmed')", [invitationKey]);
+        if (!existing.rows[0]) throw new AuthorizationError(409, "La invitación cambió durante el envío. Actualiza el panel.");
+        return { id: existing.rows[0].id, alreadyExists: true };
+      }
+      await enqueueInvitation(db, rows[0], fields, config.origin, invitation);
+      await event(db, id, "invited", actor, { documentId, documentDigest: document.digest });
+      return { id, alreadyExists: false };
+    });
+  }
+  async editInvitation(id: string, input: Record<string, unknown>, actor: string) {
+    const config = settings();
+    return this.db.transaction(async db => {
+      const { rows: [row] } = await db.query<Authorization>("SELECT * FROM sa_authorizations WHERE id=$1 FOR UPDATE", [validate.uuid(id)]);
+      if (!row) throw new AuthorizationError(404, "No se encontró la invitación.");
+      if (row.state !== "invited" || row.accepted_at || row.legal_hold || (row.retain_until && date(row.retain_until).getTime() <= Date.now())) {
+        throw new AuthorizationError(409, "Solo se pueden editar invitaciones sin aceptación y con conservación vigente.");
+      }
+      const previous = personOf(row);
+      const before = date(row.recording_at);
+      const fields = await invitationFields(input, previous.retentionPolicy, before);
+      const { personal, episode, recording, documentId, invitationKey, expires } = fields;
+      const document = await approvedDocumentOf(db, documentId);
+      if (personal.email === previous.email && personal.name === previous.name && episode === row.episode &&
+          documentId === row.document_id && +recording === +before) return { id, updated: false };
+      if (await matchingLegacyInvitation(db, fields, id)) throw new AuthorizationError(409, "Ya existe otra invitación para ese correo, grabación y documento.");
+      const invitation = token();
+      const retainUntil = row.retain_until
+        ? new Date(Math.max(+date(row.retain_until), +date(row.retain_until) + (+recording - +before)))
+        : null;
+      await db.query("UPDATE sa_outbox SET status='cancelled',payload='' WHERE authorization_id=$1 AND kind='invitation' AND status IN ('queued','failed')", [id]);
+      const sending = await db.query("SELECT id FROM sa_outbox WHERE authorization_id=$1 AND kind='invitation' AND status='sending'", [id]);
+      if (sending.rows.length) throw new AuthorizationError(409, "El correo se está enviando. Intenta editar la invitación en unos instantes.");
+      await db.query(`
+        UPDATE sa_authorizations SET personal=$2, episode=$3, recording_at=$4, document_id=$5,
+          invite_hash=$6, invite_expires=$7, retain_until=$8, invitation_key=$9,
+          guest_hash=NULL, guest_expires=NULL, verify_hash=NULL, verify_expires=NULL
+        WHERE id=$1
+      `, [id, encryptedPerson(id, personal), episode, recording, documentId, digest(invitation), expires, retainUntil, invitationKey]);
+      await enqueueInvitation(db, row, fields, config.origin, invitation);
+      await event(db, id, "invitation_edited", actor, { documentId, documentDigest: document.digest });
+      return { id, updated: true };
     });
   }
   async exchange(invitation: unknown) {
@@ -201,8 +283,8 @@ export class Authorizations {
     return pdf;
   }
   async list(search = "") {
-    const { rows } = await this.db.query<Pick<Authorization, "id" | "personal" | "episode" | "recording_at" | "state" | "created_at" | "accepted_at" | "confirmed_at" | "retain_until" | "legal_hold" | "document_id" | "confirmation_method" | "confirmed_by">>("SELECT id,personal,episode,recording_at,state,created_at,accepted_at,confirmed_at,retain_until,legal_hold,document_id,confirmation_method,confirmed_by FROM sa_authorizations ORDER BY created_at DESC");
-    return rows.map(row => ({ id: row.id, ...personOf(row), episode: row.episode, recordingAt: row.recording_at, state: row.state, createdAt: row.created_at, acceptedAt: row.accepted_at, confirmedAt: row.confirmed_at, retainUntil: row.retain_until, legalHold: row.legal_hold, documentId: row.document_id, confirmationMethod: row.confirmation_method, confirmedBy: row.confirmed_by })).filter(row => `${row.name} ${row.email} ${row.episode}`.toLowerCase().includes(search.toLowerCase()));
+    const { rows } = await this.db.query<Pick<Authorization, "id" | "personal" | "episode" | "recording_at" | "state" | "invite_expires" | "created_at" | "accepted_at" | "confirmed_at" | "retain_until" | "legal_hold" | "document_id" | "confirmation_method" | "confirmed_by">>("SELECT id,personal,episode,recording_at,state,invite_expires,created_at,accepted_at,confirmed_at,retain_until,legal_hold,document_id,confirmation_method,confirmed_by FROM sa_authorizations ORDER BY created_at DESC");
+    return rows.map(row => ({ id: row.id, ...personOf(row), episode: row.episode, recordingAt: row.recording_at, state: row.state, inviteExpires: row.invite_expires, createdAt: row.created_at, acceptedAt: row.accepted_at, confirmedAt: row.confirmed_at, retainUntil: row.retain_until, legalHold: row.legal_hold, documentId: row.document_id, confirmationMethod: row.confirmation_method, confirmedBy: row.confirmed_by })).filter(row => `${row.name} ${row.email} ${row.episode}`.toLowerCase().includes(search.toLowerCase()));
   }
   async adminRow(id: string) {
     const { rows } = await this.db.query<Authorization>("SELECT * FROM sa_authorizations WHERE id=$1", [validate.uuid(id)]);
@@ -216,6 +298,7 @@ export class Authorizations {
       if (!row) throw new AuthorizationError(404, "No se encontró la autorización.");
       if (action === "end-retention") {
         if (row.legal_hold) throw new AuthorizationError(409, "Levanta el bloqueo legal antes de finalizar la conservación.");
+        if (row.retain_until) throw new AuthorizationError(409, "Solo se puede finalizar por revisión un plazo indeterminado.");
         const explanation = validate.text(reason, "el motivo de finalización", 1000, 20);
         await db.query("UPDATE sa_authorizations SET retain_until=now(),invite_hash=NULL,guest_hash=NULL,verify_hash=NULL,state=CASE WHEN state IN ('confirmed','rejected') THEN state ELSE 'cancelled' END WHERE id=$1", [id]);
         await db.query("UPDATE sa_outbox SET status='cancelled',payload='' WHERE authorization_id=$1 AND status IN ('queued','failed')", [id]);

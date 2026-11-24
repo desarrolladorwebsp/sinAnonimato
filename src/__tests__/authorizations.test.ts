@@ -8,6 +8,7 @@ import { digest, seal, unseal } from "@/lib/authorizations/crypto";
 import { processOutbox } from "@/lib/authorizations/mail";
 import { rut } from "@/lib/authorizations/validation";
 import { PDFDocument } from "pdf-lib";
+import { calendarDay, endOfRecordingDay, formatRecording } from "@/lib/authorizations/calendar-dates";
 
 const pg = new PGlite();
 function connection(target: Pick<PGlite, "query">): Connection {
@@ -23,7 +24,9 @@ beforeAll(async () => {
   vi.stubEnv("PRODUCTION_EMAIL", "produccion@example.test");
   await pg.exec(await readFile("migrations/001_authorizations.sql", "utf8"));
   await pg.exec(await readFile("migrations/002_indefinite_retention.sql", "utf8"));
-  await pg.exec(await readFile("migrations/003_production_confirmation.sql", "utf8"));
+  for (const file of ["003_production_confirmation", "005_episode_schedule", "006_episode_formats", "007_calendar_management"]) {
+    await pg.exec(await readFile(`migrations/${file}.sql`, "utf8"));
+  }
 });
 beforeEach(async () => {
   await pg.exec("TRUNCATE sa_events,sa_outbox,sa_authorizations,sa_documents,sa_rate_limits CASCADE");
@@ -52,6 +55,48 @@ async function accepted() {
   return { ...guest, verification: await jobToken("verification") };
 }
 describe("authorizations with an isolated PostgreSQL engine", () => {
+  it("stores several date-only invitations and preserves their Chilean day and expiry", async () => {
+    const recordingDate = calendarDay(new Date(Date.now() + 86400000));
+    const input = { name: "Invitado de prueba", email: "guest@example.test", episode: "Grabación", recordingDate, documentId };
+    const first = await service.invite(input, "admin@example.test");
+    const retry = await service.invite({ ...input, email: "GUEST@example.test" }, "other@example.test");
+    expect(retry).toEqual({ id: first.id, alreadyExists: true });
+    await db.query("UPDATE sa_authorizations SET invitation_key=NULL WHERE id=$1", [first.id]);
+    expect(await service.invite(input, "admin@example.test")).toEqual(retry);
+    const second = await service.invite({ ...input, email: "second@example.test" }, "admin@example.test");
+    const rows = await service.list();
+    expect(new Set(rows.map(row => row.id))).toEqual(new Set([first.id, second.id]));
+    expect(rows.every(row => calendarDay(row.recordingAt) === recordingDate)).toBe(true);
+    expect(rows[0].inviteExpires).toEqual(endOfRecordingDay(recordingDate));
+    expect(formatRecording(rows[0].recordingAt)).not.toMatch(/\d:\d/);
+    expect((await db.query("SELECT id FROM sa_outbox WHERE kind='invitation'")).rows).toHaveLength(2);
+    await expect(service.invite({ ...input, recordingDate: "2027-02-30" }, "admin")).rejects.toThrow("fecha de grabación");
+  });
+
+  it("edits only before acceptance, revokes existing guest access and sends the replacement once", async () => {
+    const original = await invitation();
+    const initial = await service.adminRow(original.id);
+    const input = { name: "Nombre corregido", email: "new@example.test", episode: "Grabación corregida", recordingDate: calendarDay(initial.recording_at), documentId };
+    expect(await service.editInvitation(original.id, input, "admin@example.test")).toEqual({ id: original.id, updated: true });
+    expect(await service.editInvitation(original.id, input, "admin@example.test")).toEqual({ id: original.id, updated: false });
+    await expect(service.view(original.session)).rejects.toThrow();
+    const queued = await db.query<{ id: string; payload: string }>("SELECT id,payload FROM sa_outbox WHERE status='queued' AND kind='invitation'");
+    expect(queued.rows).toHaveLength(1);
+    const payload = JSON.parse(unseal(queued.rows[0].payload, `mail:${queued.rows[0].id}`));
+    expect(payload.to).toBe("new@example.test");
+    const guest = await service.exchange(new URL(payload.url).hash.slice(1));
+    const view = await service.view(guest.session);
+    await service.accept(guest.session, { name: "Nombre corregido", rut: "12345678-5", accepted: true, documentDigest: view.document.digest });
+    await expect(service.editInvitation(original.id, input, "admin@example.test")).rejects.toThrow("sin aceptación");
+    expect((await service.adminRow(original.id)).retain_until).toEqual(initial.retain_until);
+  });
+
+  it.each([
+    ["2026-04-04", "2026-04-05T03:59:59.999Z"],
+    ["2026-09-05", "2026-09-06T03:59:59.999Z"],
+  ])("finds the end of the Santiago day %s across a clock change", (date, deadline) => {
+    expect(endOfRecordingDay(date)?.toISOString()).toBe(deadline);
+  });
   it("supports explicitly configured indeterminate retention without immortal sessions", async () => {
     vi.stubEnv("AUTHORIZATION_RETENTION_MODE", "indefinite");
     try {
@@ -173,6 +218,7 @@ describe("authorizations with an isolated PostgreSQL engine", () => {
   });
   it("does not delete unexpired or legally held evidence, and cascades expired deletion", async () => {
     const guest = await invitation(); await expect(service.manage(guest.id, "delete", "admin")).rejects.toThrow();
+    await expect(service.manage(guest.id, "end-retention", "admin", "Motivo ficticio para revisión del plazo fijo.")).rejects.toThrow("plazo indeterminado");
     await service.manage(guest.id, "hold", "admin"); await db.query("UPDATE sa_authorizations SET retain_until=now()-interval '1 day' WHERE id=$1", [guest.id]);
     await expect(service.manage(guest.id, "delete", "admin")).rejects.toThrow();
     await service.manage(guest.id, "release", "admin"); await service.manage(guest.id, "delete", "admin");
