@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ArrowRight, DownloadSimple, EnvelopeSimple, FileText, Plus, SignOut, YoutubeLogo } from "@phosphor-icons/react";
+import { ArrowRight, DownloadSimple, EnvelopeSimple, FileText, Plus, YoutubeLogo } from "@phosphor-icons/react";
 import { authClient } from "@/lib/auth-client";
 import type { LegalDocument } from "@/lib/authorizations/types";
 import { localDate, STATE_LABELS } from "@/lib/authorizations/types";
@@ -10,6 +10,7 @@ import { publicationFormats, type ScheduledEpisode } from "@/lib/episode";
 import { CalendarDialog } from "./calendar-dialog";
 import { InvitationCalendar } from "./invitation-calendar";
 import { AdminReviews } from "./admin-reviews";
+import { AdminWorkspace, type AdminSection } from "./admin-workspace";
 import { AuthorizationShell } from "./shell";
 import { authorizationApi } from "./guest-flow";
 import { useHydrated } from "./use-hydrated";
@@ -28,8 +29,8 @@ export function AdminPanel() {
   const [data, setData] = useState<Overview | null>(null); const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
   const [error, setError] = useState(""); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<"authorizations" | "calendar" | "documents" | "reviews">("authorizations");
-  const [calendarSelection, setCalendarSelection] = useState<string | null>(null);
+  const [tab, setTab] = useState<AdminSection>("calendar");
+  const [calendarSelection, setCalendarSelection] = useState(() => calendarDay(new Date()));
   const [dialogDay, setDialogDay] = useState<string | null>(null);
   const [previewInvitationDocument, setPreviewInvitationDocument] = useState(false);
   const [scheduleDate, setScheduleDate] = useState<string | null>(null);
@@ -83,9 +84,15 @@ export function AdminPanel() {
     setPreviewInvitationDocument(false);
     setError("");
   }
+  function showCalendarDay(day: string) {
+    setCalendarSelection(day);
+    setEpisodeDetail(null);
+    setSelected(null);
+    setDetail(null);
+  }
   function selectCalendarDay(day: string) {
     resetCreationForms();
-    setCalendarSelection(day);
+    showCalendarDay(day);
     setDialogDay(day);
   }
   function closeCreation() {
@@ -115,7 +122,6 @@ export function AdminPanel() {
     setEpisodeDetail(null);
     setSelected(null);
     setDetail(null);
-    if (next === "calendar") setCalendarSelection(current => current ?? calendarDay(new Date()));
   }
   function decide(row: Row, decision: "confirm" | "reject") {
     const text = decision === "confirm" ? `¿Confirmar la autorización de ${row.name}? El invitado ya registró su aceptación. Se guardará tu validación como producción y se generará el comprobante PDF.` : `¿Rechazar la autorización de ${row.name}? Se invalidarán los enlaces pendientes y se registrará el rechazo sin generar un comprobante de autorización.`;
@@ -176,7 +182,7 @@ export function AdminPanel() {
           </form>
         </section>);
 
-  return <AuthorizationShell admin>
+  return <AuthorizationShell admin workspace={Boolean(data)}>
     {loading ? <p role="status">Comprobando acceso…</p> : !data ? <section className="authorization-card authorization-login">
       <EnvelopeSimple size={36} className="authorization-feature-icon" aria-hidden="true" /><h1>El respaldo de cada conversación.</h1>
       <p className="authorization-lead">Ingresa con el correo autorizado y tu contraseña.</p>
@@ -189,18 +195,22 @@ export function AdminPanel() {
         <label>Contraseña<input name="password" type="password" autoComplete="current-password" maxLength={128} value={password} onChange={event => setPassword(event.target.value)} required /></label>
         <button className="authorization-button" disabled={busy || !hydrated}>{busy ? "Procesando…" : "Entrar al panel"}<ArrowRight size={20} aria-hidden="true" /></button>
       </form>
-    </section> : <>
-      <div className="authorization-admin-heading"><div><p className="authorization-kicker">Equipo de producción</p><h1>Autorizaciones</h1><p className="authorization-lead">Cada invitado, su documento y un respaldo verificable.</p></div><button className="authorization-button authorization-button-secondary" disabled={busy} onClick={() => void act(async () => { await authClient.signOut(); setData(null); setPassword(""); changeTab("authorizations"); setCalendarSelection(null); })}><SignOut size={18} /> Salir</button></div>
-      <div className="authorization-admin-identity">{data.admin.email} · {data.admin.role === "admin" ? "Administración" : "Producción"}</div>
-      {!canInvite && <section className="authorization-editor" role="status"><h2>Antes de enviar invitaciones</h2><p>{!approvedDocument ? "Carga y publica el documento legal aprobado. " : ""}{!data.readiness.retentionConfigured ? "Define el plazo y la política de conservación con el equipo responsable. " : ""}{!data.readiness.mailConfigured ? "Completa la configuración del correo de producción. " : ""}Puedes trabajar en el panel mientras preparan estos antecedentes.</p></section>}
-      <div className="authorization-metrics"><div><strong>{data.authorizations.filter(row => row.state === "confirmed").length}</strong><span>Confirmadas</span></div><div><strong>{data.authorizations.filter(row => row.state === "pending").length}</strong><span>Por confirmar</span></div><div><strong>{data.authorizations.filter(row => row.state === "invited").length}</strong><span>Invitaciones</span></div></div>
-      <nav className="authorization-tabs" aria-label="Secciones del panel">
-        <button aria-current={tab === "authorizations" ? "page" : undefined} onClick={() => changeTab("authorizations")}>Participaciones</button>
-        <button aria-current={tab === "calendar" ? "page" : undefined} onClick={() => changeTab("calendar")}>Calendario</button>
-        <button aria-current={tab === "documents" ? "page" : undefined} onClick={() => changeTab("documents")}>Documentos legales</button>
-        {data.admin.role === "admin" && <button aria-current={tab === "reviews" ? "page" : undefined} onClick={() => changeTab("reviews")}>Reseñas</button>}
-        {tab !== "reviews" && <button disabled={busy} onClick={() => void act(reload)}>Actualizar</button>}
-      </nav>
+    </section> : <AdminWorkspace active={tab} onNavigate={changeTab} admin={data.admin} busy={busy} onRefresh={() => void act(reload)} onSignOut={() => void act(async () => {
+      await authClient.signOut();
+      setData(null);
+      setPassword("");
+      setTab("calendar");
+      setCalendarSelection(calendarDay(new Date()));
+      closeCreation();
+      setSelected(null);
+      setDetail(null);
+      setEpisodeDetail(null);
+      setDocument(null);
+    })}>
+      {tab === "authorizations" && <>
+        {!canInvite && <section className="authorization-editor" role="status"><h2>Antes de enviar invitaciones</h2><p>{!approvedDocument ? "Carga y publica el documento legal aprobado. " : ""}{!data.readiness.retentionConfigured ? "Define el plazo y la política de conservación con el equipo responsable. " : ""}{!data.readiness.mailConfigured ? "Completa la configuración del correo de producción. " : ""}Puedes trabajar en el panel mientras preparan estos antecedentes.</p></section>}
+        <div className="authorization-metrics"><div><strong>{data.authorizations.filter(row => row.state === "confirmed").length}</strong><span>Confirmadas</span></div><div><strong>{data.authorizations.filter(row => row.state === "pending").length}</strong><span>Por confirmar</span></div><div><strong>{data.authorizations.filter(row => row.state === "invited").length}</strong><span>Invitaciones</span></div></div>
+      </>}
       {((!dialogDay && error) || message) && <div className="authorization-admin-feedback">
         {!dialogDay && error && <p className="authorization-alert" role="alert">{error}</p>}
         {message && <p className="authorization-notice" role="status">{message}</p>}
@@ -216,14 +226,12 @@ export function AdminPanel() {
           </div>}
         </CalendarDialog>}
         {tab === "calendar" && data.scheduledEpisodes === null && <p className="authorization-alert" role="status">No se pudo cargar la programación de videos. Usa «Actualizar» para volver a intentarlo.</p>}
-        {tab === "calendar" && calendarSelection && <InvitationCalendar
+        {tab === "calendar" && <InvitationCalendar
           rows={data.authorizations}
           episodes={data.scheduledEpisodes ?? []}
           day={calendarSelection}
-          onChangeDay={setCalendarSelection}
+          onChangeDay={showCalendarDay}
           onSelectDay={selectCalendarDay}
-          onCreate={openInvite}
-          onSchedule={canSchedule ? openSchedule : undefined}
           onDetail={openDetail}
           onEpisode={episode => { setSelected(null); setDetail(null); setEpisodeDetail(episode); }}
           busy={busy}
@@ -268,7 +276,7 @@ export function AdminPanel() {
         {data.admin.role === "admin" && <>{selected.state !== "confirmed" && selected.state !== "cancelled" && selected.state !== "rejected" && <button disabled={busy} className="authorization-text-button" onClick={() => { if (window.confirm("¿Anular esta invitación? El enlace dejará de funcionar.")) void act(async () => { await authorizationApi("admin/manage", { id: selected.id, action: "cancel" }); setSelected(null); await reload(); }, "Invitación anulada."); }}>Anular invitación</button>}<button className="authorization-text-button" disabled={busy} onClick={() => void act(async () => { await authorizationApi("admin/manage", { id: selected.id, action: selected.legalHold ? "release" : "hold" }); setSelected(null); await reload(); }, "Política del expediente actualizada.")}>{selected.legalHold ? "Levantar bloqueo legal" : "Bloquear eliminación por conservación legal"}</button>{!selected.retainUntil && !selected.legalHold && <button type="button" className="authorization-text-button" disabled={busy} onClick={() => { const reason = window.prompt("Indica por qué terminó la finalidad o el fundamento para conservar este expediente (mínimo 20 caracteres). Se invalidarán los enlaces y quedará habilitada su eliminación separada."); if (reason && reason.trim().length >= 20) void act(async () => { await authorizationApi("admin/manage", { id: selected.id, action: "end-retention", reason }); setSelected(null); await reload(); }, "Conservación finalizada. La eliminación requiere una acción adicional."); }}>Finalizar conservación por revisión</button>}{selected.retainUntil && new Date(selected.retainUntil) <= new Date() && !selected.legalHold && <button className="authorization-text-button" disabled={busy} onClick={() => { if (window.confirm("Se eliminarán definitivamente los datos, el comprobante y el historial del expediente. Esta acción no se puede deshacer. ¿Aplicar la eliminación según la política de conservación?")) void act(async () => { await authorizationApi("admin/manage", { id: selected.id, action: "delete" }); setSelected(null); await reload(); }, "Expediente eliminado de la base activa. Los respaldos siguen su ciclo de conservación."); }}>Eliminar expediente vencido</button>}</>}
       </div></section>}
       {tab !== "reviews" && document && <section className="authorization-editor"><div className="authorization-toolbar"><h2>{document.title} · {document.version}</h2><button className="authorization-text-button" onClick={() => setDocument(null)}>Cerrar documento</button></div><div className="authorization-document"><div>{document.content}</div><h3>Privacidad</h3><div>{document.privacy}</div><h3>Declaración de aceptación</h3><div>{document.acceptance}</div></div><p className="authorization-hash">SHA-256: {document.digest}</p>{data.admin.role === "admin" && !document.approved_at && !document.retired_at && <form method="post" className="authorization-form" onSubmit={event => { event.preventDefault(); void act(async () => { await authorizationApi("admin/approve", { id: document.id, approved }); setDocument(null); await reload(); }, "Versión publicada y disponible para nuevas invitaciones."); }}><label className="authorization-checkbox"><input type="checkbox" required checked={approved} onChange={event => setApproved(event.target.checked)} /><span>Confirmo que este documento y su aviso de privacidad fueron revisados y aprobados por el equipo responsable.</span></label><button className="authorization-button" disabled={!approved || busy}>Publicar versión aprobada</button></form>}{data.admin.role === "admin" && document.approved_at && !document.retired_at && <button className="authorization-text-button" disabled={busy} onClick={() => { if (window.confirm("Al retirar esta versión se bloquearán nuevas aceptaciones y confirmaciones pendientes que la utilicen. Las autorizaciones completadas conservarán su evidencia. ¿Retirar versión?")) void act(async () => { await authorizationApi("admin/retire", { id: document.id }); setDocument(null); await reload(); }); }}>Retirar versión de circulación</button>}</section>}
-    </>}
+    </AdminWorkspace>}
     {!data && error && <p className="authorization-alert" role="alert">{error}</p>}
   </AuthorizationShell>;
 }
