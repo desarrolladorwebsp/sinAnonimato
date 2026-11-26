@@ -2,8 +2,9 @@ import { cache } from "react";
 
 import { connection } from "next/server";
 import { database } from "./authorizations/db";
-import { selectCatalogEpisodes, selectCatalogShorts, type Episode, type ScheduledEpisode } from "./episode";
+import { selectCatalogEpisodes, selectCatalogShorts, type Episode, type PublishedYoutubeShort, type ScheduledEpisode } from "./episode";
 import { listScheduledEpisodes } from "./episode-schedule";
+import { getLatestYoutubeShorts } from "./social-feeds";
 import { verifyScheduledAvailability } from "./youtube-availability";
 export type { Episode } from "./episode";
 
@@ -88,24 +89,28 @@ async function discoverEpisodes(): Promise<Episode[]> {
   }
 }
 
-function publicMedia(discovered: Episode[], schedule: ScheduledEpisode[]) {
+function publicMedia(discovered: Episode[], schedule: ScheduledEpisode[], latestShorts: PublishedYoutubeShort[] | null = null) {
   const now = Date.now();
   return {
     episodes: selectCatalogEpisodes(discovered, schedule, now),
-    shorts: selectCatalogShorts(discovered, schedule, now),
+    shorts: selectCatalogShorts(discovered, schedule, now, latestShorts),
   };
 }
 
-export const getPodcastMedia = cache(async () => {
-  if (!process.env.DATABASE_URL) return publicMedia(await discoverEpisodes(), []);
+export const getPodcastMedia = cache(async (includeLatestShorts = false) => {
+  const latestShorts = includeLatestShorts ? getLatestYoutubeShorts() : Promise.resolve(null);
+  if (!process.env.DATABASE_URL) {
+    const [discovered, shorts] = await Promise.all([discoverEpisodes(), latestShorts]);
+    return publicMedia(discovered, [], shorts);
+  }
 
   // The published list depends on the current instant, even without any administrator action.
   await connection();
   try {
-    const [discovered, schedule] = await Promise.all([
-      discoverEpisodes(), listScheduledEpisodes(database()).then(entries => verifyScheduledAvailability(entries)),
+    const [discovered, schedule, shorts] = await Promise.all([
+      discoverEpisodes(), listScheduledEpisodes(database()).then(entries => verifyScheduledAvailability(entries)), latestShorts,
     ]);
-    return publicMedia(discovered, schedule);
+    return publicMedia(discovered, schedule, shorts);
   } catch {
     // A temporary database failure must not expose a video via YouTube discovery before its scheduled time.
     console.warn("No se pudo consultar la programación de capítulos.");

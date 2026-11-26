@@ -21,7 +21,7 @@ export function durationMinutes(duration: string) {
   return Math.floor(durationSeconds(duration) / 60);
 }
 
-function durationSeconds(duration: string) {
+export function durationSeconds(duration: string) {
   const time = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(duration);
   return Number(time?.[1] ?? 0) * 86400 + Number(time?.[2] ?? 0) * 3600 + Number(time?.[3] ?? 0) * 60 + Number(time?.[4] ?? 0);
 }
@@ -50,19 +50,25 @@ export const configuredEpisodes = [secondEpisode, firstEpisode];
 export const publicationFormats = { chapter: "Capítulo / video completo", short: "Short vertical" } as const;
 export type VideoFormat = keyof typeof publicationFormats;
 export type ScheduledEpisode = { youtubeId: string; title: string; publishAt: string; format: VideoFormat; removedAt?: string | null; available?: boolean };
+export type PublishedYoutubeShort = YoutubeShort & { publishedAt: number };
 
 function publishedSchedule(schedule: ScheduledEpisode[], format: VideoFormat, now: number) {
   return schedule.filter(item => item.format === format && !item.removedAt && item.available === true && Date.parse(item.publishAt) <= now)
     .sort((first, second) => second.publishAt.localeCompare(first.publishAt));
 }
 
-export function selectCatalogShorts(discovered: Episode[], schedule: ScheduledEpisode[], now: number): YoutubeShort[] {
+export function selectCatalogShorts(discovered: Episode[], schedule: ScheduledEpisode[], now: number, latest: PublishedYoutubeShort[] | null = null): YoutubeShort[] {
   const scheduledIds = new Set(schedule.map(item => item.youtubeId));
   const metadata = new Map(discovered.map(item => [item.id, item]));
-  return [
-    ...publishedSchedule(schedule, "short", now).map(({ youtubeId, title }) => ({ id: youtubeId, title, embeddable: metadata.get(youtubeId)?.embeddable })),
-    ...youtubeShorts.filter(item => !scheduledIds.has(item.id)),
-  ];
+  const scheduled = publishedSchedule(schedule, "short", now).map(({ youtubeId, title, publishAt }) => ({
+    id: youtubeId, title, embeddable: metadata.get(youtubeId)?.embeddable, publishedAt: Date.parse(publishAt),
+  }));
+  const unscheduled = <T extends YoutubeShort>(items: T[]) => items.filter(item => !scheduledIds.has(item.id));
+  if (!latest) return [...scheduled, ...unscheduled(youtubeShorts)].slice(0, 3);
+
+  return [...scheduled, ...unscheduled(latest).filter(item => item.publishedAt <= now)]
+    .sort((first, second) => second.publishedAt - first.publishedAt)
+    .slice(0, 3);
 }
 
 export function selectCatalogEpisodes(discovered: Episode[], schedule: ScheduledEpisode[], now: number) {

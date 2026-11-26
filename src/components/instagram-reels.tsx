@@ -1,13 +1,8 @@
 import { ArrowUpRight, InstagramLogo } from "@phosphor-icons/react/ssr";
-import { featuredInstagramPosts, getInstagramPostUrl, instagramProfile } from "@/content/instagram-reels";
+import { getInstagramPostUrl, instagramProfile, type InstagramPost } from "@/content/instagram-reels";
 import { StreamReveal } from "@/components/stream-reveal";
 
-const posts = Array.from(new Map(featuredInstagramPosts.flatMap(({ url, title }) => {
-  const permalink = getInstagramPostUrl(url);
-  return permalink ? [[permalink, { permalink, title }] as const] : [];
-})).values());
-
-function InstagramPostCard({ permalink, title }: (typeof posts)[number]) {
+function InstagramPostCard({ permalink, title }: { permalink: string; title: string }) {
   return (
     <StreamReveal as="li" className="reel-card" direction="right">
       <div className="reel-video">
@@ -29,7 +24,12 @@ function InstagramPostCard({ permalink, title }: (typeof posts)[number]) {
   );
 }
 
-export function InstagramReels() {
+export function InstagramReels({ items }: { items: readonly InstagramPost[] }) {
+  const posts = Array.from(new Map(items.flatMap(({ url, title }) => {
+    const permalink = getInstagramPostUrl(url);
+    return permalink ? [[permalink, { permalink, title }] as const] : [];
+  })).values());
+
   return (
     <section id="reels" className="reels-section" aria-labelledby="reels-title">
       <div className="podcast-wrap">

@@ -1,6 +1,6 @@
 export const instagramProfile = "https://www.instagram.com/sinanonimato.cl/";
 
-type InstagramPost = {
+export type InstagramPost = {
   url: string;
   title: string;
 };
