@@ -3,7 +3,7 @@ import { AuthorizationError } from "./authorizations/config";
 import type { Connection, Database } from "./authorizations/db";
 import { text } from "./authorizations/validation";
 import { configuredEpisodes, type ScheduledEpisode, type VideoFormat } from "./episode";
-import { youtubeShorts } from "@/content/youtube-shorts";
+import { knownYoutubeShortIds, youtubeShorts } from "@/content/youtube-shorts";
 
 type ScheduleRow = Omit<ScheduledEpisode, "publishAt" | "removedAt"> & { publishAt: Date; removedAt: Date | null };
 const scheduleColumns = 'youtube_id AS "youtubeId", title, format, publish_at AS "publishAt", removed_at AS "removedAt"';
@@ -58,7 +58,7 @@ export async function listScheduledEpisodes(db: Connection): Promise<ScheduledEp
 
 function validateFormat(id: string, value: unknown, isShortLink = false) {
   const format = videoFormat(value);
-  if (format === "chapter" && (isShortLink || youtubeShorts.some(short => short.id === id))) {
+  if (format === "chapter" && (isShortLink || knownYoutubeShortIds.has(id))) {
     throw new AuthorizationError(400, "Ese enlace es de un Short. Selecciona Short vertical como formato.");
   }
   return format;

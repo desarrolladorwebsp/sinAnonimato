@@ -1,4 +1,4 @@
-import { youtubeShorts, type YoutubeShort } from "@/content/youtube-shorts";
+import { knownYoutubeShortIds, youtubeShorts, type YoutubeShort } from "@/content/youtube-shorts";
 
 export type Episode = {
   id: string;
@@ -82,10 +82,9 @@ export function selectCatalogEpisodes(discovered: Episode[], schedule: Scheduled
   const configured = configuredEpisodes.filter(item => !scheduledIds.has(item.id))
     .map(item => ({ ...item, ...metadata.get(item.id), title: item.title }));
   const configuredIds = new Set(configured.map(item => item.id));
-  const curatedShortIds = new Set(youtubeShorts.map(item => item.id));
   const automatic = discovered
     // YouTube uploads do not tell us which short-duration videos are vertical.
-    .filter(item => !configuredIds.has(item.id) && !scheduledIds.has(item.id) && !curatedShortIds.has(item.id) && durationSeconds(item.duration) > 180)
+    .filter(item => !configuredIds.has(item.id) && !scheduledIds.has(item.id) && !knownYoutubeShortIds.has(item.id) && durationSeconds(item.duration) > 180)
     .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
   if (!scheduled.length) return [...configured, ...automatic];
 

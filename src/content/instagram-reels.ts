@@ -5,11 +5,11 @@ type InstagramPost = {
   title: string;
 };
 
-// Publicaciones destacadas del perfil oficial, en el orden de aparición.
+// Publicaciones del perfil oficial, de la más reciente a la más antigua.
 export const featuredInstagramPosts: readonly InstagramPost[] = [
-  { url: "https://www.instagram.com/sinanonimato.cl/reel/DfiDp1qgyKN/", title: "Reel del 9 de noviembre" },
-  { url: "https://www.instagram.com/sinanonimato.cl/reel/DfH2_JyRgDg/", title: "Reel del 30 de octubre" },
-  { url: "https://www.instagram.com/p/DfkWVoGAQo0/", title: "Publicación destacada" },
+  { url: "https://www.instagram.com/reel/DgLMf3bgQEx/", title: "Reel del 25 de noviembre" },
+  { url: "https://www.instagram.com/reel/DgI6zqBhlbP/", title: "Reel del 24 de noviembre" },
+  { url: "https://www.instagram.com/reel/Df8KK7ngOMr/", title: "Reel del 19 de noviembre" },
 ];
 
 export function getInstagramPostUrl(value: string) {
