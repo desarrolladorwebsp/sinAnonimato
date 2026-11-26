@@ -38,7 +38,7 @@ const firstEpisode: Episode = {
 
 const secondEpisode: Episode = {
   id: "-q6uhzBdQJc",
-  title: "Capítulo 2",
+  title: "Capítulo 2: Camila Almonacid",
   description: "El segundo capítulo de Sin Anonimato.",
   duration: "",
   publishedAt: "",

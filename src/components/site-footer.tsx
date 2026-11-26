@@ -4,10 +4,7 @@ import { Logo } from "@/components/logo";
 import { SocialLinks } from "@/components/social-links";
 import { navItems } from "@/content/site";
 
-const creators = [
-  { name: "SmartStudio", href: "https://smartstudio.cl/", logo: "/images/smartstudio-footer.webp", width: 455 },
-  { name: "SmartPro", href: "https://smartpro.cl/", logo: "/images/smartpro-footer.webp", width: 350 },
-];
+import studioLogo from "../../public/images/smartstudio-footer.webp";
 
 export function SiteFooter({ innerPage = false }: { innerPage?: boolean }) {
 
@@ -52,19 +49,14 @@ export function SiteFooter({ innerPage = false }: { innerPage?: boolean }) {
         className="footer-legal mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-white/15 pt-4 text-[10px] leading-relaxed tracking-[0.08em] text-white/60 uppercase"
       >
         <p className="normal-case">Copyright © 2026 Sin Anonimato. Todos los derechos reservados.</p>
-        <div className="flex flex-wrap items-center gap-x-4 normal-case">
+        <div className="flex items-center gap-3 normal-case">
           <span className="text-xs text-white/65">Creado por</span>
-          <div className="flex flex-wrap items-center gap-x-4">
-            {creators.map(({ name, href, logo, width }) => (
-              <a
-                key={name}
-                href={href}
-                className="inline-flex min-h-11 items-center rounded-sm transition-opacity hover:opacity-75 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
-              >
-                <Image src={logo} alt={name} width={width} height={66} unoptimized className="h-[17px] w-auto sm:h-5" />
-              </a>
-            ))}
-          </div>
+          <a
+            href="https://smartstudio.cl/"
+            className="inline-flex min-h-11 items-center rounded-sm transition-opacity hover:opacity-75 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+          >
+            <Image src={studioLogo} alt="SmartStudio by Smart Pro" unoptimized className="h-auto w-[8.5rem] sm:w-[9.5rem]" />
+          </a>
         </div>
         <p className="flex flex-wrap gap-3">
           <a href={innerPage ? "/#contacto" : "#contacto"}>Contacto</a>
